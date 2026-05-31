@@ -403,7 +403,7 @@ function openLogin(){
 function doLogin(){
   const name=(document.getElementById('login_name').value||'').trim();
   if(!name) return;
-  if(!isValidAccount(name)){ alert('查無此帳號。請聯絡管理員（'+SUPER_ADMIN+'）新增帳號。'); return; }
+  if(!isValidAccount(name)){ alert('查無此帳號，請聯絡管理員新增。'); return; }
   currentUser={name,isAdmin:accountIsAdmin(name)};
   try{ localStorage.setItem(USERKEY,name); }catch(e){}
   closeModal('loginModal'); renderAuth(); renderAll();
