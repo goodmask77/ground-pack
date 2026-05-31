@@ -28,7 +28,8 @@ ground-pack/
 
 - serverless functions（皆 **CommonJS**，因無 package.json type:module）共用 Vercel 環境變數 `ANTHROPIC_API_KEY`，同網域 POST、本機 file:// 無法用：
   - `api/extract.js`：截圖→產品 JSON（可選 `EXTRACT_MODEL`，預設 claude-sonnet-4-6）。
-  - `api/translate.js`：中文品名→英文菜單名（可選 `TRANSLATE_MODEL`，預設 claude-haiku）。產品視窗 `autoTranslateEn()`：品名 blur 時若英文欄空就自動翻譯帶入；`pmEnTouched` 防止覆蓋手動輸入；「🔄 自動翻譯」可強制重翻。
+  - `api/translate.js`：中文品名→英文菜單名（可選 `TRANSLATE_MODEL`，預設 claude-haiku）。
+  - `api/assistant.js`：AI 包材採購主管（可選 `ASSISTANT_MODEL`，預設 claude-sonnet-4-6）。前端「AI主管」分頁(ai) 傳 `aiSnapshot()` 資料快照＋對話史；Claude 回 `{reply(markdown), actions[]}`。AI **只讀資料＋提議動作**，不碰 DB；前端 `aiApply`→`execAiAction` 用既有函式(upProduct/upItem/bindPack/del*…)執行，**先確認卡、刪除二次 confirm**，寫入經 `requireWrite`。動作型別：add_product/add_packaging/link/unlink/update_*/delete_*。`mdToHtml` 渲染條列/表格。產品視窗 `autoTranslateEn()`：品名 blur 時若英文欄空就自動翻譯帶入；`pmEnTouched` 防止覆蓋手動輸入；「🔄 自動翻譯」可強制重翻。
   - 兩支 API 回傳 `usage`(input/output tokens)＋`model`。前端 `recordUsage()` 依 `AI_PRICE` 估算成本：寫一筆 `ai_usage` 表 ＋ 記一筆修改紀錄。設定/備份頁 `renderAiUsage()` 顯示累計估算花費/次數/tokens（估算值，精確以 Anthropic 後台為準）。`ai_usage` 表未建時靜默略過。
 
 ## 部署流程（不要再用 vercel --prod）

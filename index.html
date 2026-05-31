@@ -189,6 +189,24 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
 .mnode.pack img{width:62px;height:62px;object-fit:cover;border:1px solid var(--line2);border-radius:6px;display:block;background:var(--paper2)}
 .mnode .sub{font-family:var(--mono);font-size:10px;color:var(--ink2)}
 .mind-stage svg{position:absolute;left:0;top:0;overflow:visible;z-index:1;pointer-events:none}
+/* AI 主管 聊天 */
+.ai-wrap{display:flex;flex-direction:column;height:70vh;border:1.5px solid var(--line2);background:var(--card);margin-top:10px}
+.ai-msgs{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+.ai-msg{max-width:88%;padding:9px 13px;border:1.5px solid var(--line2);background:var(--paper);font-size:14px;line-height:1.6;border-radius:10px}
+.ai-msg.user{align-self:flex-end;background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.ai-msg.ai{align-self:flex-start}
+.ai-msg.sys{align-self:center;font-size:12px;color:var(--ink2);background:transparent;border:none;padding:2px;max-width:96%}
+.ai-msg table{border-collapse:collapse;width:100%;margin:6px 0;font-size:13px}
+.ai-msg th,.ai-msg td{border:1px solid var(--line2);padding:4px 7px;text-align:left;vertical-align:top}
+.ai-msg th{background:var(--paper2);font-family:var(--mono);font-size:11px}
+.ai-msg ul,.ai-msg ol{margin:5px 0 5px 20px}
+.ai-msg li{margin:2px 0}
+.ai-msg code{background:var(--paper2);padding:1px 4px;font-family:var(--mono);font-size:12px}
+.ai-act{align-self:flex-start;max-width:88%;border:1.5px solid var(--accent);background:#fbeee6;padding:10px 12px;font-size:13px;border-radius:10px}
+.ai-act .ttl{font-weight:700;color:var(--accent-d);margin-bottom:3px}
+.ai-chips{display:flex;gap:6px;flex-wrap:wrap;padding:2px 10px 8px}
+.ai-inbar{display:flex;gap:8px;padding:10px;border-top:1.5px solid var(--line2);background:var(--paper)}
+.ai-inbar textarea{flex:1;border:1.5px solid var(--line2);padding:9px 11px;font-family:inherit;font-size:14px;resize:none;height:46px;background:#fff;border-radius:8px}
 </style>
 </head>
 <body>
@@ -206,6 +224,7 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
       <button class="tab" data-tab="vendors">廠商</button>
       <button class="tab" data-tab="analysis">分析中心</button>
       <button class="tab" data-tab="mind">心智圖</button>
+      <button class="tab" data-tab="ai">AI主管</button>
       <button class="tab" data-tab="data">設定 / 備份</button>
       <button class="tab" data-tab="history">修改紀錄</button>
       <button class="tab hide" id="tab-accounts" data-tab="accounts">帳號</button>
@@ -256,6 +275,19 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
       <button class="btn acc sm wr-vendors" style="margin-left:auto" onclick="openVendor()">＋ 新增廠商</button></h2>
     <div id="noperm-vendors" class="note" style="border-color:var(--accent);color:var(--accent-d)">🔒 你沒有「廠商」頁的編輯權限，目前為唯讀。需要編輯請聯絡管理員開放。</div>
     <div id="vendorgrid" class="vgrid"></div>
+  </section>
+
+  <section id="ai" class="hide">
+    <h2 style="margin-top:18px"><span class="n">AI</span>AI 包材採購主管</h2>
+    <div class="note">用自然語言查詢與管理產品 / 包材 / 供應商。AI 只負責<b>讀資料＋提議動作</b>，新增 / 修改 / 刪除一律由你按「確認」後執行（刪除會再次確認）。</div>
+    <div class="ai-wrap">
+      <div class="ai-msgs" id="aimsgs"></div>
+      <div class="ai-chips" id="aichips"></div>
+      <div class="ai-inbar">
+        <textarea id="aiinput" placeholder="例：冰美式需要哪些包材？／哪些包材還沒對應產品？／新增產品「抹茶拿鐵」分類飲品，綁定冷飲杯、杯蓋（Enter 送出、Shift+Enter 換行）" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();aiSend()}"></textarea>
+        <button class="btn acc" id="aisendbtn" onclick="aiSend()">送出</button>
+      </div>
+    </div>
   </section>
 
   <section id="mind" class="hide">
@@ -871,7 +903,7 @@ async function recordUsage(kind,model,usage,label,silent){
   const cost=estCost(model,usage);
   const inT=(usage&&usage.input_tokens)||0, outT=(usage&&usage.output_tokens)||0;
   if(cloud){ try{ await sb.from('ai_usage').insert({kind,model:model||'',input_tokens:inT,output_tokens:outT,cost_usd:Number(cost.toFixed(6)),user_name:(currentUser&&currentUser.name)||''}); }catch(e){} }
-  if(!silent) logHist(kind==='extract'?'AI辨識':'AI翻譯', label||'', `${inT}+${outT} tokens · 估 $${cost.toFixed(4)}`);
+  if(!silent) logHist(({extract:'AI辨識',translate:'AI翻譯',assistant:'AI主管'})[kind]||'AI', label||'', `${inT}+${outT} tokens · 估 $${cost.toFixed(4)}`);
   if(!document.getElementById('data').classList.contains('hide')) renderAiUsage();
 }
 async function translateText(name){
@@ -1448,6 +1480,122 @@ function renderAnalysis(){ renderAnModes(); const el=document.getElementById('an
     return; }
 }
 
+/* ============ AI 包材採購主管（聊天） ============ */
+let aiMsgs=[], aiBusy=false;
+function aiSnapshot(){
+  return {
+    categories: catList(), units: optList('unit'), tags: optList('tag'),
+    products: DB.products.map(p=>({id:p.id,name:p.name,category:p.category||'未分類',english_name:p.en||'',price:p.price||'',unit:p.unit||'',tags:p.tags||[],is_active:p.active!==false,
+      packaging: packagingOf(p.id).map(it=>it.name)})),
+    packaging: DB.items.map(it=>({id:it.id,name:it.name,type:it.type,type_label:CAT[it.type]||it.type,spec:it.spec||'',material:it.material||'',grp:it.group||'',
+      used_by: productsUsing(it.id).map(p=>p.name), vendor_count: vendorsForPack(it).length, photo_count:(DB.images[it.id]||[]).length})),
+    vendors: DB.vendors.map(v=>({id:v.id,name:v.name,english:v.en||'',cats:v.cats||[]}))
+  };
+}
+function mdToHtml(md){
+  const e=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const inl=s=>e(s).replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>');
+  const L=(md||'').split(/\r?\n/); let h='',i=0;
+  while(i<L.length){ const ln=L[i];
+    if(/^\s*\|.*\|\s*$/.test(ln) && i+1<L.length && /^\s*\|[-:\s|]+\|\s*$/.test(L[i+1])){
+      const head=ln.split('|').slice(1,-1).map(c=>c.trim()); i+=2; const rows=[];
+      while(i<L.length && /^\s*\|.*\|\s*$/.test(L[i])){ rows.push(L[i].split('|').slice(1,-1).map(c=>c.trim())); i++; }
+      h+='<table><thead><tr>'+head.map(x=>`<th>${inl(x)}</th>`).join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>`<td>${inl(c)}</td>`).join('')+'</tr>').join('')+'</tbody></table>'; continue; }
+    const hm=ln.match(/^(#{1,4})\s+(.*)/); if(hm){ h+=`<div style="font-weight:700;margin:6px 0 2px">${inl(hm[2])}</div>`; i++; continue; }
+    if(/^\s*[-*•]\s+/.test(ln)){ const it=[]; while(i<L.length && /^\s*[-*•]\s+/.test(L[i])){ it.push(L[i].replace(/^\s*[-*•]\s+/,'')); i++; } h+='<ul>'+it.map(x=>`<li>${inl(x)}</li>`).join('')+'</ul>'; continue; }
+    if(/^\s*\d+\.\s+/.test(ln)){ const it=[]; while(i<L.length && /^\s*\d+\.\s+/.test(L[i])){ it.push(L[i].replace(/^\s*\d+\.\s+/,'')); i++; } h+='<ol>'+it.map(x=>`<li>${inl(x)}</li>`).join('')+'</ol>'; continue; }
+    if(!ln.trim()){ i++; continue; }
+    h+=`<div>${inl(ln)}</div>`; i++; }
+  return h;
+}
+const AI_VERB={add_product:'新增產品',add_packaging:'新增包材',link:'建立對應',unlink:'移除對應',update_product:'修改產品',update_packaging:'修改包材',delete_product:'刪除產品',delete_packaging:'刪除包材'};
+function aiActDesc(a){
+  if(a.type==='add_product') return `${a.name}（類別：${a.category||'未分類'}${a.unit?'，單位：'+a.unit:''}${a.price?'，售價：'+a.price:''}${(a.tags&&a.tags.length)?'，標籤：'+a.tags.join('/'):''}）${(a.packaging&&a.packaging.length)?'｜綁定包材：'+a.packaging.join('、'):''}`;
+  if(a.type==='add_packaging') return `${a.name}（類型：${a.ptype||'other'}${a.spec?'，規格：'+a.spec:''}${a.material?'，材質：'+a.material:''}）`;
+  if(a.type==='link') return `${a.product} ＋ ${(a.packaging||[]).join('、')}`;
+  if(a.type==='unlink') return `${a.product} － ${(a.packaging||[]).join('、')}`;
+  if(a.type==='update_product'||a.type==='update_packaging') return `${a.match} → ${Object.entries(a.set||{}).map(([k,v])=>k+'='+(Array.isArray(v)?v.join('/'):v)).join('，')}`;
+  if(a.type==='delete_product'||a.type==='delete_packaging') return `${a.match}（永久刪除，不可復原）`;
+  return JSON.stringify(a);
+}
+function aiInit(){ if(!aiMsgs.length){
+    aiMsgs.push({role:'assistant',content:'你好，我是 **AI 包材採購主管** 👋\n可以問我，例如：\n- 某產品需要哪些包材\n- 某包材被哪些產品共用\n- 哪些包材還沒對應產品 / 哪些產品還沒設包材\n- 某分類所有產品的包材需求、產生採購清單\n\n也能幫你**新增/修改/綁定**產品與包材（都會先給你確認）。'}); }
+  renderAiChips(); aiRender(); setTimeout(()=>{const i=document.getElementById('aiinput'); if(i)i.focus();},60); }
+function renderAiChips(){ const el=document.getElementById('aichips'); if(!el) return;
+  const chips=['哪些包材還沒對應任何產品？','哪些產品還沒設定包材？','用表格列出每個產品需要的包材','幫我產生一份包材採購確認清單'];
+  el.innerHTML=chips.map(c=>`<span class="chip" onclick="aiQuick('${jsEsc(c)}')">${esc(c)}</span>`).join(''); }
+function aiQuick(t){ const i=document.getElementById('aiinput'); if(i)i.value=t; aiSend(); }
+function aiRender(){ const el=document.getElementById('aimsgs'); if(!el) return; let h='';
+  aiMsgs.forEach((m,mi)=>{
+    if(m.sys){ h+=`<div class="ai-msg sys">${mdToHtml(m.content)}</div>`; return; }
+    h+=`<div class="ai-msg ${m.role==='user'?'user':'ai'}">${m.pending?'<span class="muted">…思考中…</span>':mdToHtml(m.content)}</div>`;
+    (m.actions||[]).forEach((a,ai)=>{ if(a._done){ h+=`<div class="ai-msg sys">✅ 已${AI_VERB[a.type]||''}：${esc(aiActDesc(a))}</div>`; return; }
+      if(a._cancel){ h+=`<div class="ai-msg sys">已取消：${AI_VERB[a.type]||''}</div>`; return; }
+      const danger=(a.type==='delete_product'||a.type==='delete_packaging');
+      h+=`<div class="ai-act" style="${danger?'border-color:#b3261e':''}"><div class="ttl" style="${danger?'color:#b3261e':''}">需要確認：${esc(AI_VERB[a.type]||a.type)}</div><div>${esc(aiActDesc(a))}</div>
+        <div class="row" style="gap:8px;margin-top:8px"><button class="btn acc sm" onclick="aiApply(${mi},${ai})">${danger?'確認刪除':'確認執行'}</button><button class="btn ghost sm" onclick="aiCancel(${mi},${ai})">取消</button></div></div>`; });
+  });
+  el.innerHTML=h; el.scrollTop=el.scrollHeight; }
+async function aiSend(){ if(aiBusy) return;
+  const inp=document.getElementById('aiinput'); const text=(inp.value||'').trim(); if(!text) return;
+  inp.value=''; aiMsgs.push({role:'user',content:text}); aiMsgs.push({role:'assistant',content:'',pending:true}); aiRender();
+  aiBusy=true; const btn=document.getElementById('aisendbtn'); if(btn){btn.disabled=true;btn.textContent='思考中…';}
+  try{
+    let hist=aiMsgs.filter(m=>!m.pending && !m.sys).map(m=>({role:m.role,content:m.content}));
+    while(hist.length && hist[0].role!=='user') hist.shift();
+    const r=await fetch('/api/assistant',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({messages:hist,data:aiSnapshot()})});
+    if(!r.ok){ const t=await r.text(); throw new Error('伺服器 '+r.status+'：'+t.slice(0,200)); }
+    const d=await r.json();
+    aiMsgs=aiMsgs.filter(m=>!m.pending);
+    aiMsgs.push({role:'assistant',content:d.reply||'(無回覆)',actions:Array.isArray(d.actions)?d.actions:[]});
+    if(d.usage) recordUsage('assistant',d.model,d.usage,'AI主管');
+    aiRender();
+  }catch(err){ aiMsgs=aiMsgs.filter(m=>!m.pending);
+    aiMsgs.push({role:'assistant',content:'❌ 出錯了：'+((err&&err.message)?err.message:err)+'\n（請確認 Vercel 已設 ANTHROPIC_API_KEY 且 Anthropic 帳戶有額度）'}); aiRender(); }
+  finally{ aiBusy=false; const b=document.getElementById('aisendbtn'); if(b){b.disabled=false;b.textContent='送出';} }
+}
+function aiCancel(mi,ai){ const a=aiMsgs[mi] && aiMsgs[mi].actions && aiMsgs[mi].actions[ai]; if(a) a._cancel=true; aiRender(); }
+async function aiApply(mi,ai){ const a=aiMsgs[mi] && aiMsgs[mi].actions && aiMsgs[mi].actions[ai]; if(!a||a._done||a._cancel) return;
+  const isItem=(a.type==='add_packaging'||a.type==='update_packaging'||a.type==='delete_packaging');
+  if(!requireWrite(isItem?'items':'products')) return;
+  if(a.type==='delete_product'||a.type==='delete_packaging'){ if(!confirm('再次確認：要永久刪除「'+a.match+'」？此動作無法復原。')) return; }
+  try{ const msg=await execAiAction(a); a._done=true;
+    aiMsgs.push({role:'assistant',sys:true,content:'✅ '+msg});
+    renderProducts(); renderItems(); renderCatPhotos(); aiRender();
+  }catch(err){ aiMsgs.push({role:'assistant',sys:true,content:'❌ 失敗：'+((err&&err.message)?err.message:err)}); aiRender(); }
+}
+function aiFindProd(ref){ ref=(ref||'').trim(); return DB.products.find(p=>p.id===ref)||DB.products.find(p=>(p.name||'').trim()===ref)||DB.products.find(p=>(p.name||'').toLowerCase()===ref.toLowerCase()); }
+function aiFindItem(ref){ ref=(ref||'').trim(); return DB.items.find(i=>i.id===ref)||DB.items.find(i=>(i.name||'').trim()===ref)||DB.items.find(i=>(i.name||'').toLowerCase()===ref.toLowerCase()); }
+function aiApplySet(obj,set,kind){ if(!set) return;
+  const map=kind==='product'?{name:'name',category:'category',english_name:'en',en:'en',price:'price',unit:'unit',note:'note',tags:'tags',is_active:'active',active:'active'}
+    :{name:'name',type:'type',spec:'spec',material:'material',grp:'group',group:'group',note:'note'};
+  Object.keys(set).forEach(k=>{ const f=map[k]; if(f!==undefined) obj[f]=set[k]; }); }
+async function execAiAction(a){
+  if(a.type==='add_product'){
+    if(cloud&&cloudMissingProducts) throw new Error('雲端尚未建立 products 表（見設定/備份建表 SQL）');
+    if(!a.name) throw new Error('缺少產品名稱'); if(aiFindProd(a.name)) throw new Error('已有同名產品：'+a.name);
+    const o={id:'p'+Date.now(),category:a.category||'未分類',name:a.name,en:a.english_name||'',price:a.price||'',unit:a.unit||'',tags:Array.isArray(a.tags)?a.tags:[],note:a.note||'',active:true,sort:(DB.products.reduce((m,x)=>Math.max(m,x.sort||0),0))+1};
+    DB.products.push(o); await upProduct(o);
+    let bound=0; for(const pn of (a.packaging||[])){ const it=aiFindItem(pn); if(it){ DB.prodPack[o.id]=DB.prodPack[o.id]||[]; if(!DB.prodPack[o.id].includes(it.id)){ DB.prodPack[o.id].push(it.id); await bindPack(o.id,it.id); bound++; } } }
+    logHist('AI新增產品',o.name,(a.packaging||[]).join('、')); return `已新增產品「${o.name}」${bound?'，並綁定 '+bound+' 個包材':''}`; }
+  if(a.type==='add_packaging'){
+    if(!a.name) throw new Error('缺少包材名稱'); if(aiFindItem(a.name)) throw new Error('已有同名包材：'+a.name);
+    const type=CATKEYS.includes(a.ptype)?a.ptype:'other';
+    const o={id:'i'+Date.now(),group:a.group||'單品包材',name:a.name,type,spec:a.spec||'',prod:'',material:a.material||'',note:a.note||'',sort:(DB.items.reduce((m,x)=>Math.max(m,x.sort||0),0))+1};
+    DB.items.push(o); await upItem(o); logHist('AI新增包材',o.name,''); return `已新增包材「${o.name}」（類型 ${CAT[type]||type}）`; }
+  if(a.type==='link'||a.type==='unlink'){
+    const p=aiFindProd(a.product); if(!p) throw new Error('找不到產品：'+a.product); let n=0;
+    for(const pn of (a.packaging||[])){ const it=aiFindItem(pn); if(!it) continue; DB.prodPack[p.id]=DB.prodPack[p.id]||[];
+      if(a.type==='link'){ if(!DB.prodPack[p.id].includes(it.id)){ DB.prodPack[p.id].push(it.id); await bindPack(p.id,it.id); n++; } }
+      else { if(DB.prodPack[p.id].includes(it.id)){ DB.prodPack[p.id]=DB.prodPack[p.id].filter(x=>x!==it.id); await unbindPack(p.id,it.id); n++; } } }
+    logHist(a.type==='link'?'AI綁定包材':'AI移除綁定',p.name,(a.packaging||[]).join('、')); return `${p.name} ${a.type==='link'?'已綁定':'已移除'} ${n} 個包材`; }
+  if(a.type==='update_product'){ const p=aiFindProd(a.match); if(!p) throw new Error('找不到產品：'+a.match); aiApplySet(p,a.set,'product'); await upProduct(p); logHist('AI修改產品',p.name,JSON.stringify(a.set||{})); return `已修改產品「${p.name}」`; }
+  if(a.type==='update_packaging'){ const it=aiFindItem(a.match); if(!it) throw new Error('找不到包材：'+a.match); aiApplySet(it,a.set,'item'); await upItem(it); logHist('AI修改包材',it.name,JSON.stringify(a.set||{})); return `已修改包材「${it.name}」`; }
+  if(a.type==='delete_product'){ const p=aiFindProd(a.match); if(!p) throw new Error('找不到產品：'+a.match); DB.products=DB.products.filter(x=>x.id!==p.id); delete DB.prodPack[p.id]; await delProductCloud(p.id); logHist('AI刪除產品',p.name,''); return `已刪除產品「${p.name}」`; }
+  if(a.type==='delete_packaging'){ const it=aiFindItem(a.match); if(!it) throw new Error('找不到包材：'+a.match); DB.items=DB.items.filter(x=>x.id!==it.id); delete DB.matches[it.id]; delete DB.images[it.id]; Object.keys(DB.prodPack).forEach(pid=>{DB.prodPack[pid]=(DB.prodPack[pid]||[]).filter(x=>x!==it.id);}); await delItemCloud(it.id); logHist('AI刪除包材',it.name,''); return `已刪除包材「${it.name}」`; }
+  throw new Error('未知動作：'+a.type);
+}
+
 /* ============ 心智圖（中心 → 類別 → 產品 → 包材，放射狀） ============ */
 const MIND_COLORS=['#c4582a','#3f7d4e','#3a6ea5','#c98a14','#6b4a86','#a4441d','#2f7d7a','#9b5d2a','#b3492f','#477a52'];
 let mindT={x:0,y:0,s:1}, mindWH={w:0,h:0};
@@ -1629,7 +1777,7 @@ function closeModal(id){ document.getElementById(id).classList.remove('on'); }
 /* ===== Tabs ===== */
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on')); t.classList.add('on');
-  ['dash','products','items','vendors','analysis','mind','data','history','accounts'].forEach(s=>document.getElementById(s).classList.add('hide'));
+  ['dash','products','items','vendors','analysis','mind','ai','data','history','accounts'].forEach(s=>document.getElementById(s).classList.add('hide'));
   document.getElementById(t.dataset.tab).classList.remove('hide');
   if(t.dataset.tab==='dash') renderDash();
   if(t.dataset.tab==='products') renderProducts();
@@ -1637,6 +1785,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   if(t.dataset.tab==='vendors') renderVendors();
   if(t.dataset.tab==='analysis') renderAnalysis();
   if(t.dataset.tab==='mind'){ mindSetup(); renderMind(); }
+  if(t.dataset.tab==='ai') aiInit();
   if(t.dataset.tab==='data') renderAiUsage();
   if(t.dataset.tab==='history') renderHistory();
   if(t.dataset.tab==='accounts') renderAccounts();
