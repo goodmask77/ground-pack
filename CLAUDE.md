@@ -125,7 +125,7 @@ create table packaging_images(id bigint generated always as identity primary key
 
 - 狀態：`DB.products`（[{id,category,name,en,price,note,active,sort}]）、`DB.prodPack`（product_id→[packaging_id]）、`DB.images`（packaging_id→[{id,url,label,sort}]）。`cloudLoad` 對這三張表各自 try/catch，未建表不影響其他資料。
 - 產品類別 `PRODUCT_CATS`（Pizza/早餐/越南三明治/速食/副餐/沙拉飯碗/湯品/甜點/冰淇淋/飲品），允許自訂。
-- 頁面：**產品管理**（`renderProducts`，依類別分組卡片、搜尋/篩選）、**分析中心**（`renderAnalysis`＋`anMode`：p2p 產品→包材 / k2p 包材→產品 / share 共用率 / coverage 供應商覆蓋率 / gaps 缺漏）。
+- 頁面：**產品管理** 為兩欄（`.pcols`）：左 `renderProducts` 依類別分組的表格（點類別標題 `selectCat` 選類別、點列開 `productDetail`）；右 `renderCatPhotos` 顯示「該選定類別產品所綁定的包材」照片並可上傳（`onCatPhotoPick`/`delPhotoCat`，共用 `doUploadPhoto`）、**分析中心**（`renderAnalysis`＋`anMode`：p2p 產品→包材 / k2p 包材→產品 / share 共用率 / coverage 供應商覆蓋率 / gaps 缺漏）。
 - 詳情用 modal：`productDetail()`（綁定/解綁包材）、`packDetail()`（照片上傳/刪除、被哪些產品用、對應供應商）。`vendorsForPack()`＝該包材的 match 供應商 ∪ 依 type 建議的供應商。
 - 照片：`uploadPhoto()` 上傳到 Storage bucket `PHOTO_BUCKET`（'packaging-photos'）→ `addImageRow` 寫 packaging_images；本機模式存 base64。
 - 寫入把關：產品/綁定走 `requireWrite('products')`；包材主檔與照片走 `requireWrite('items')`。

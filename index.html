@@ -149,6 +149,12 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
 .badge.gn{background:#eef5ef;color:var(--green);border-color:var(--green)}
 .badge.off{color:var(--grey);border-color:var(--grey)}
 .acat{font-family:var(--disp);font-weight:700;font-size:14px;padding:7px 0 5px;border-bottom:2px solid var(--ink);margin-top:16px;display:flex;gap:8px;align-items:center}
+.acat.click{cursor:pointer}
+.acat.click:hover{color:var(--accent)}
+.acat.sel{color:var(--accent);border-bottom-color:var(--accent)}
+.pcols{display:grid;grid-template-columns:1.7fr 1fr;gap:16px;margin-top:12px;align-items:start}
+@media(max-width:900px){.pcols{grid-template-columns:1fr}}
+.catpanel{position:sticky;top:84px;border:1.5px solid var(--line2);background:var(--card);padding:14px;max-height:calc(100vh - 110px);overflow:auto}
 .acat .c{font-family:var(--mono);font-size:11px;color:var(--ink2)}
 /* 照片 */
 .phgrid{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
@@ -215,7 +221,10 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
       <select id="prodCatFilter" style="border:1.5px solid var(--line2);padding:7px 10px;background:#fff" onchange="renderProducts()"></select>
       <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" id="prodHideInactive" style="width:auto" onchange="renderProducts()"> 只看啟用中</label>
     </div>
-    <div id="productlist" style="margin-top:12px"></div>
+    <div class="pcols">
+      <div id="productlist"></div>
+      <div id="catphotos" class="catpanel"></div>
+    </div>
   </section>
 
   <section id="items" class="hide">
@@ -510,7 +519,7 @@ const SEED_ITEMS = [
 /* ============ 狀態 ============ */
 let cloud=false, sb=null, DB={vendors:[],items:[],matches:{},products:[],prodPack:{},images:{}};
 let openItems={}, editingItem=null, editingVendor=null, vmCats=[];
-let editingProduct=null, anMode='p2p', detailPackId=null, batchRows=[];
+let editingProduct=null, anMode='p2p', detailPackId=null, batchRows=[], selCat=null;
 const KEY='ground_pack_v1';
 
 /* ============ 帳號 / 登入 ============ */
@@ -931,31 +940,67 @@ function renderProdCatFilter(){ const sel=document.getElementById('prodCatFilter
   const cur=sel.value||'';
   const cats=[...new Set(PRODUCT_CATS.concat(DB.products.map(p=>p.category).filter(Boolean)))];
   sel.innerHTML='<option value="">全部類別</option>'+cats.map(c=>`<option ${cur===c?'selected':''}>${esc(c)}</option>`).join(''); }
+function jsEsc(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+function selectCat(c){ selCat=c; renderProducts(); }
 function renderProducts(){
   const el=document.getElementById('productlist'); if(!el) return;
   renderProdCatFilter();
   const q=((document.getElementById('prodSearch')||{}).value||'').trim().toLowerCase();
   const catf=(document.getElementById('prodCatFilter')||{}).value||'';
   const onlyActive=(document.getElementById('prodHideInactive')||{}).checked;
-  if(!DB.products.length){ el.innerHTML='<div class="note">還沒有產品。點右上「＋ 新增產品」開始（若雲端尚未建 products 等資料表，請先到「設定 / 備份」看建表 SQL）。</div>'; return; }
+  if(!DB.products.length){ el.innerHTML='<div class="note">還沒有產品。點右上「＋ 新增產品」開始（若雲端尚未建 products 等資料表，請先到「設定 / 備份」看建表 SQL）。</div>'; renderCatPhotos(); return; }
   let list=DB.products.filter(p=>{
     if(catf && (p.category||'未分類')!==catf) return false;
     if(onlyActive && p.active===false) return false;
     if(q && !((p.name||'').toLowerCase().includes(q)||(p.en||'').toLowerCase().includes(q))) return false;
     return true; });
-  if(!list.length){ el.innerHTML='<div class="note">沒有符合條件的產品。</div>'; return; }
-  const cats=[...new Set(PRODUCT_CATS.concat(list.map(p=>p.category||'未分類')))];
+  if(!list.length){ el.innerHTML='<div class="note">沒有符合條件的產品。</div>'; renderCatPhotos(); return; }
+  const cats=[...new Set(PRODUCT_CATS.concat(list.map(p=>p.category||'未分類')))].filter(c=>list.some(p=>(p.category||'未分類')===c));
+  if(!selCat || !cats.includes(selCat)) selCat=cats[0];
   let h='';
   cats.forEach(c=>{ const ps=list.filter(p=>(p.category||'未分類')===c); if(!ps.length) return;
-    h+=`<div class="acat">${esc(c)} <span class="c">${ps.length} 項</span></div><div class="pgrid">`;
+    h+=`<div class="acat click ${c===selCat?'sel':''}" onclick="selectCat('${jsEsc(c)}')">${esc(c)} <span class="c">${ps.length} 項</span>${c===selCat?'<span class="badge acc" style="margin-left:auto">▶ 右側看包材照片</span>':'<span class="muted" style="margin-left:auto;font-size:11px">點此看包材照片</span>'}</div>`;
+    h+='<table class="atable"><thead><tr><th>品名</th><th>售價</th><th>包材</th><th>狀態</th><th></th></tr></thead><tbody>';
     ps.forEach(p=>{ const cnt=(DB.prodPack[p.id]||[]).filter(id=>DB.items.find(i=>i.id===id)).length;
-      h+=`<div class="pcard ${p.active===false?'off':''}" onclick="productDetail('${p.id}')">
-        <div class="pn">${esc(p.name)}</div>${p.en?`<div class="pen">${esc(p.en)}</div>`:''}
-        <div class="pmeta">${p.active===false?'<span class="badge off">停用</span>':'<span class="badge gn">啟用</span>'}
-          ${p.price?`<span class="badge">$${esc(p.price)}</span>`:''}<span class="badge acc">包材 ${cnt}</span></div></div>`; });
-    h+='</div>'; });
+      h+=`<tr style="cursor:pointer" onclick="productDetail('${p.id}')">
+        <td class="vn">${esc(p.name)}${p.en?`<br><span class="muted mono" style="font-size:10px">${esc(p.en)}</span>`:''}</td>
+        <td class="mono">${p.price?'$'+esc(p.price):'—'}</td>
+        <td class="mono">${cnt}</td>
+        <td>${p.active===false?'<span class="badge off">停用</span>':'<span class="badge gn">啟用</span>'}</td>
+        <td><button class="btn ghost sm wr-products" onclick="event.stopPropagation();openProduct('${p.id}')">編輯</button></td></tr>`; });
+    h+='</tbody></table>'; });
+  el.innerHTML=h;
+  renderCatPhotos();
+}
+function renderCatPhotos(){
+  const el=document.getElementById('catphotos'); if(!el) return;
+  const canI=canEdit('items');
+  if(!selCat){ el.innerHTML='<div class="muted" style="font-size:12px">左側選一個類別，這裡會顯示該類別產品用到的包材照片，並可上傳。</div>'; return; }
+  const prodIds=DB.products.filter(p=>(p.category||'未分類')===selCat).map(p=>p.id);
+  const packIds=[...new Set(prodIds.flatMap(pid=>DB.prodPack[pid]||[]))];
+  const packs=packIds.map(id=>DB.items.find(i=>i.id===id)).filter(Boolean);
+  let h=`<div class="acat" style="margin-top:0">「${esc(selCat)}」包材照片 <span class="c">${packs.length} 項包材</span></div>`;
+  if(!packs.length){ h+='<div class="note">此類別的產品還沒綁定任何包材。先點左側產品 →「綁定包材」，這裡就會出現對應包材可上傳照片。</div>'; el.innerHTML=h; return; }
+  packs.forEach(it=>{ const imgs=DB.images[it.id]||[];
+    h+=`<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line)">
+      <div class="row" style="justify-content:space-between"><div><b>${esc(it.name)}</b> ${it.spec?`<span class="ispec">${esc(it.spec)}</span>`:''}</div>
+        <span class="linkish" style="font-size:12px" onclick="packDetail('${it.id}')">詳情</span></div>
+      <div class="phgrid">`;
+    imgs.forEach(im=>{ const idArg=(im.id==null)?'null':`'${jsEsc(String(im.id))}'`;
+      h+=`<div class="ph"><img src="${esc(im.url)}" onclick="lightbox('${esc(im.url)}')" alt="">${canI?`<button class="del" title="刪除" onclick="delPhotoCat('${it.id}',${idArg})">×</button>`:''}${im.label?`<div class="cap">${esc(im.label)}</div>`:''}</div>`; });
+    if(canI){ h+=`<label class="ph" style="display:flex;align-items:center;justify-content:center;width:104px;height:104px;border:1.5px dashed var(--line2);cursor:pointer;font-size:26px;color:var(--ink2)" title="上傳照片">＋<input type="file" accept="image/*" class="hide" onchange="onCatPhotoPick(event,'${it.id}')"></label>`; }
+    else if(!imgs.length){ h+='<span class="muted" style="font-size:12px">尚無照片</span>'; }
+    h+='</div></div>'; });
   el.innerHTML=h;
 }
+async function onCatPhotoPick(e,packId){ if(!requireWrite('items')){ e.target.value=''; return; }
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  try{ await doUploadPhoto(f,packId,''); renderCatPhotos(); renderItems(); }
+  catch(err){ alert('上傳失敗：'+((err&&err.message)?err.message:err)+'\n\n請確認已在 Supabase 建立公開 bucket：'+PHOTO_BUCKET+'（見說明檔）。'); } }
+async function delPhotoCat(packId,imgId){ if(!requireWrite('items'))return; if(!confirm('刪除這張照片？'))return;
+  DB.images[packId]=(DB.images[packId]||[]).filter(im=>String(im.id)!==String(imgId));
+  if(cloud){ if(imgId!=null) await delImageRow(imgId); } else await persist();
+  renderCatPhotos(); renderItems(); logHist('刪除照片', packName(packId), ''); }
 function openProduct(id){ if(!requireWrite('products'))return; editingProduct=id||null;
   const sel=document.getElementById('pm_cat');
   const cats=[...new Set(PRODUCT_CATS.concat(DB.products.map(p=>p.category).filter(Boolean)))];
@@ -1042,19 +1087,19 @@ function packDetail(id){ const it=DB.items.find(i=>i.id===id); if(!it) return; d
   document.getElementById('packDetailModal').classList.add('on');
 }
 function fileToDataURL(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); }); }
+async function doUploadPhoto(file,packId,label){    // 共用上傳核心
+  if(file.size>10*1024*1024) throw new Error('圖片過大（>10MB），請壓縮後再上傳');
+  const url=cloud?await uploadPhoto(file,packId):await fileToDataURL(file);
+  const newId=cloud?await addImageRow(packId,url,label||''):('img'+Date.now());
+  (DB.images[packId]=DB.images[packId]||[]).push({id:newId,url,label:label||'',sort:(DB.images[packId]||[]).length});
+  if(!cloud) await persist();
+  logHist('上傳照片', packName(packId), label||''); }
 async function onPhotoPick(e,packId){ if(!requireWrite('items')){ e.target.value=''; return; }
   const f=e.target.files[0]; e.target.value=''; if(!f) return;
-  if(f.size>10*1024*1024){ alert('圖片過大（>10MB），請壓縮後再上傳。'); return; }
   const label=((document.getElementById('ph_label')||{}).value||'').trim();
   const st=document.getElementById('ph_status'); if(st) st.textContent='上傳中…';
-  try{
-    const url=cloud?await uploadPhoto(f,packId):await fileToDataURL(f);
-    const newId=cloud?await addImageRow(packId,url,label):('img'+Date.now());
-    (DB.images[packId]=DB.images[packId]||[]).push({id:newId,url,label,sort:(DB.images[packId]||[]).length});
-    if(!cloud) await persist();
-    if(st) st.textContent=''; packDetail(packId); renderItems();
-    logHist('上傳照片', packName(packId), label||'');
-  }catch(err){ if(st) st.textContent='';
+  try{ await doUploadPhoto(f,packId,label); if(st) st.textContent=''; packDetail(packId); renderItems(); }
+  catch(err){ if(st) st.textContent='';
     alert('上傳失敗：'+((err&&err.message)?err.message:err)+'\n\n請確認已在 Supabase 建立「公開」bucket：'+PHOTO_BUCKET+'，並開放 anon 上傳（見說明檔）。'); }
 }
 async function delPhoto(packId,imgId){ if(!requireWrite('items'))return; if(!confirm('刪除這張照片？')) return;
