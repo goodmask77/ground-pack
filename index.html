@@ -268,6 +268,11 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
       <button class="btn ghost wr-data" onclick="resetAll()">↺ 清空並重置為預設</button>
     </div>
 
+    <h2><span class="n">AI</span>AI 用量 / 估算花費
+      <button class="btn ghost sm" style="margin-left:auto" onclick="renderAiUsage()">↻ 重新整理</button></h2>
+    <div class="note">截圖辨識與自動翻譯的累計用量與<b>估算</b>花費。每次呼叫也會記進「修改紀錄」。</div>
+    <div id="aiusage" style="margin-top:8px"></div>
+
     <h2><span class="n">建表</span>雲端資料表 SQL（產品模組）</h2>
     <div class="note">若「產品管理」出現「尚未建立 products 表」警告，把下面整段貼到 <b>Supabase → SQL Editor</b> 執行一次（選 Run without RLS）。執行後重整本頁即可正常儲存產品 / 綁定 / 照片。</div>
     <textarea readonly onclick="this.select()" style="width:100%;min-height:230px;border:1.5px solid var(--line2);padding:10px;font-family:var(--mono);font-size:12px;margin-top:8px;background:#fff">alter table items add column if not exists material text;
@@ -285,6 +290,11 @@ create table if not exists packaging_images(
   id bigint generated always as identity primary key,
   packaging_id text references items(id) on delete cascade,
   image_url text, label text, sort_order int default 0);
+
+create table if not exists ai_usage(
+  id bigint generated always as identity primary key,
+  ts timestamptz default now(), kind text, model text,
+  input_tokens int, output_tokens int, cost_usd numeric, user_name text);
 
 alter publication supabase_realtime add table products;
 alter publication supabase_realtime add table product_packaging;
@@ -771,6 +781,35 @@ async function logHist(action, target, detail){
 function histLabel(iid,vid){ const it=DB.items.find(i=>i.id===iid), v=vid?DB.vendors.find(x=>x.id===vid):null;
   return `${it?it.name:iid}${vid?(' × '+(v?(v.en||v.name):vid)):''}`; }
 
+/* ====== AI 用量 / 估算花費（精確帳務以 Anthropic 後台為準）====== */
+const AI_PRICE={ 'claude-haiku-4-5':{in:1,out:5}, 'claude-sonnet-4-6':{in:3,out:15}, 'claude-opus-4-8':{in:15,out:75} }; // USD / 1M tokens（估算）
+function priceFor(model){ if(!model) return {in:3,out:15}; const k=Object.keys(AI_PRICE).find(p=>String(model).indexOf(p)===0); return k?AI_PRICE[k]:{in:3,out:15}; }
+function estCost(model,usage){ if(!usage) return 0; const p=priceFor(model);
+  return (usage.input_tokens||0)/1e6*p.in + (usage.output_tokens||0)/1e6*p.out; }
+async function recordUsage(kind,model,usage,label){
+  const cost=estCost(model,usage);
+  const inT=(usage&&usage.input_tokens)||0, outT=(usage&&usage.output_tokens)||0;
+  if(cloud){ try{ await sb.from('ai_usage').insert({kind,model:model||'',input_tokens:inT,output_tokens:outT,cost_usd:Number(cost.toFixed(6)),user_name:(currentUser&&currentUser.name)||''}); }catch(e){} }
+  logHist(kind==='extract'?'AI辨識':'AI翻譯', label||'', `${inT}+${outT} tokens · 估 $${cost.toFixed(4)}`);
+  if(!document.getElementById('data').classList.contains('hide')) renderAiUsage();
+}
+async function renderAiUsage(){
+  const el=document.getElementById('aiusage'); if(!el) return;
+  if(!cloud){ el.innerHTML='<div class="muted" style="font-size:12px">本機模式不統計花費。</div>'; return; }
+  let rows=[];
+  try{ const r=await sb.from('ai_usage').select('kind,input_tokens,output_tokens,cost_usd'); if(r.error) throw r.error; rows=r.data||[]; }
+  catch(e){ el.innerHTML='<div class="note">尚未建立 <b>ai_usage</b> 資料表（用量統計用）。在下方建表 SQL 區塊有含這張表，執行後重整即可。</div>'; return; }
+  const sum=rows.reduce((a,b)=>a+Number(b.cost_usd||0),0);
+  const inTok=rows.reduce((a,b)=>a+(b.input_tokens||0),0), outTok=rows.reduce((a,b)=>a+(b.output_tokens||0),0);
+  const ext=rows.filter(r=>r.kind==='extract').length, tr=rows.filter(r=>r.kind==='translate').length;
+  el.innerHTML=`<div class="stats">
+    <div class="stat"><div class="v">$${sum.toFixed(3)}</div><div class="l">估算總花費（USD）</div></div>
+    <div class="stat"><div class="v">${ext}</div><div class="l">截圖辨識次數</div></div>
+    <div class="stat"><div class="v">${tr}</div><div class="l">自動翻譯次數</div></div>
+    <div class="stat"><div class="v">${(inTok+outTok).toLocaleString()}</div><div class="l">總 tokens（in+out）</div></div>
+  </div><div class="muted" style="font-size:11px;margin-top:8px">⚠ 為前端估算值，精確帳務請以 <b>platform.claude.com → Usage</b> 為準。</div>`;
+}
+
 /* ============ 對應/建議 ============ */
 function suggestedVendors(item){ return DB.vendors.filter(v=>(v.cats||[]).includes(item.type)); }
 function matchesFor(id){ return DB.matches[id]||[]; }
@@ -1053,7 +1092,7 @@ async function autoTranslateEn(force){
     const r=await fetch('/api/translate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:name})});
     if(!r.ok){ const t=await r.text(); throw new Error('伺服器 '+r.status+'：'+t.slice(0,120)); }
     const data=await r.json();
-    if(data.english){ enEl.value=data.english; pmEnTouched=false; }
+    if(data.english){ enEl.value=data.english; pmEnTouched=false; recordUsage('translate',data.model,data.usage,name); }
     if(st) st.textContent='';
   }catch(err){ if(st) st.textContent='';
     if(force) alert('自動翻譯失敗：'+(err&&err.message?err.message:err)+'\n\n需在 Vercel 設定 ANTHROPIC_API_KEY（與截圖辨識同一把）。可先手動輸入英文。'); }
@@ -1236,6 +1275,7 @@ async function batchRecognize(file){
     if(!r.ok){ const t=await r.text(); throw new Error('伺服器 '+r.status+'：'+t.slice(0,160)); }
     const data=await r.json();
     const got=(data.products||[]).map(p=>({category:p.category||'',name:p.name||'',en:p.english_name||p.en||'',price:(p.price==null?'':String(p.price)),note:p.note||''})).filter(p=>p.name.trim());
+    recordUsage('extract',data.model,data.usage,'截圖辨識 '+(got.length)+' 筆');
     if(!got.length){ if(st) st.textContent='這張圖沒辨識到產品，換一張或改用「貼上文字」。'; return; }
     batchRows=batchRows.concat(got); renderBatchRows();
     if(st) st.textContent='✅ 已辨識 '+got.length+' 筆（累計 '+batchRows.length+' 筆），可再貼下一張或直接修改後匯入。';
@@ -1313,6 +1353,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   if(t.dataset.tab==='items') renderItems();
   if(t.dataset.tab==='vendors') renderVendors();
   if(t.dataset.tab==='analysis') renderAnalysis();
+  if(t.dataset.tab==='data') renderAiUsage();
   if(t.dataset.tab==='history') renderHistory();
   if(t.dataset.tab==='accounts') renderAccounts();
 });

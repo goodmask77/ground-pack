@@ -22,7 +22,7 @@ module.exports = async function handler(req, res) {
     const j = await r.json();
     let english = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join(' ').trim();
     english = english.replace(/^["'`\s]+/, '').replace(/["'`.\s]+$/, '').trim();
-    res.status(200).json({ english });
+    res.status(200).json({ english, usage: j.usage || null, model });
   } catch (err) {
     res.status(500).json({ error: String((err && err.message) || err) });
   }

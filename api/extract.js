@@ -59,7 +59,7 @@ module.exports = async function handler(req, res) {
         note: String(p.note || '')
       }));
 
-    res.status(200).json({ products });
+    res.status(200).json({ products, usage: j.usage || null, model });
   } catch (err) {
     res.status(500).json({ error: String((err && err.message) || err) });
   }

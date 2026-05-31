@@ -29,6 +29,7 @@ ground-pack/
 - serverless functions（皆 **CommonJS**，因無 package.json type:module）共用 Vercel 環境變數 `ANTHROPIC_API_KEY`，同網域 POST、本機 file:// 無法用：
   - `api/extract.js`：截圖→產品 JSON（可選 `EXTRACT_MODEL`，預設 claude-sonnet-4-6）。
   - `api/translate.js`：中文品名→英文菜單名（可選 `TRANSLATE_MODEL`，預設 claude-haiku）。產品視窗 `autoTranslateEn()`：品名 blur 時若英文欄空就自動翻譯帶入；`pmEnTouched` 防止覆蓋手動輸入；「🔄 自動翻譯」可強制重翻。
+  - 兩支 API 回傳 `usage`(input/output tokens)＋`model`。前端 `recordUsage()` 依 `AI_PRICE` 估算成本：寫一筆 `ai_usage` 表 ＋ 記一筆修改紀錄。設定/備份頁 `renderAiUsage()` 顯示累計估算花費/次數/tokens（估算值，精確以 Anthropic 後台為準）。`ai_usage` 表未建時靜默略過。
 
 ## 部署流程（不要再用 vercel --prod）
 
