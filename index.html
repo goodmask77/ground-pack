@@ -249,8 +249,7 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
   <h3>登入</h3>
   <div class="note" style="margin-top:0">輸入你的帳號名稱即可登入（<b>免密碼</b>）。沒有帳號請聯絡管理員新增。</div>
   <div class="fld" style="margin-top:12px"><label>帳號</label>
-    <input id="login_name" list="login_list" placeholder="例：goodmask77" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()">
-    <datalist id="login_list"></datalist></div>
+    <input id="login_name" placeholder="請輸入帳號名稱" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()"></div>
   <div class="modacts">
     <button class="btn ghost" onclick="closeModal('loginModal')">取消</button>
     <button class="btn acc" onclick="doLogin()">登入</button>
@@ -397,8 +396,6 @@ async function delAccountStore(name){
 }
 
 function openLogin(){
-  document.getElementById('login_list').innerHTML=[SUPER_ADMIN,...accounts.map(a=>a.name)]
-    .map(n=>`<option value="${esc(n)}">`).join('');
   document.getElementById('login_name').value='';
   document.getElementById('loginModal').classList.add('on');
   setTimeout(()=>document.getElementById('login_name').focus(),50);
