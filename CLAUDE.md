@@ -70,7 +70,8 @@ create table matches(item_id text references items(id) on delete cascade,
   status text, price text, moq text, lead text, note text, chosen boolean default false,
   hidden boolean default false,
   primary key(item_id, vendor_id));
-create table accounts(name text primary key, is_admin boolean default false, sort int default 0);
+create table accounts(name text primary key, is_admin boolean default false, sort int default 0,
+  perms jsonb default '[]'::jsonb);  -- perms：該帳號可編輯的頁面 key 陣列，子集 of ['items','vendors','data']
 create table history(id bigint generated always as identity primary key, ts timestamptz default now(),
   user_name text, action text, target text, detail text);
 -- RLS 全關（公開讀寫設計）；realtime 已對五表開啟（vendors/items/matches/accounts/history）。
@@ -78,13 +79,18 @@ create table history(id bigint generated always as identity primary key, ts time
 --   表未建時 logHist 靜默略過、不影響編輯（沿用容錯設計）。「修改紀錄」分頁讀最近 500 筆顯示，管理員可清空。
 ```
 
-## 帳號 / 登入（輕量門禁）
+## 帳號 / 登入（輕量門禁＋逐頁權限）
 
-- **未登入 = 唯讀**（看得到資料、改不了）；**登入（只輸帳號名、免密碼）= 可編輯**。
+- **未登入 = 唯讀**；**登入（只輸帳號名、免密碼）後預設仍唯讀**，要由管理員逐頁開放編輯權限。
 - 內建管理員常數 `SUPER_ADMIN='goodmask77'`：永遠可登入、不可刪除、即使 `accounts` 表還沒建也能用（bootstrap 安全）。
-- 其他帳號存 `accounts` 表（雲端共享、即時同步）；本機模式存 `DB.accounts`。管理員在「帳號」分頁新增/刪除帳號、切換管理員角色。
-- 寫入把關：所有 mutating 函式開頭呼叫 `requireWrite()`（未登入→開登入框並中止）；帳號管理另需 `requireAdmin()`。UI 上 `.wronly` 按鈕在 `body.ro`（未登入）時隱藏。
-- 目前登入帳號記在 `localStorage['ground_pack_user']`。
+- **逐頁編輯權限**：可控制的頁面 `PAGES=['items','vendors','data']`（需求對應 / 廠商 / 設定備份）。
+  - 每帳號 `perms` 陣列存可編輯頁面；管理員（含內建）`accountPerms()` 一律回傳全部頁面。新帳號預設 `perms:[]`（不能改）。
+  - 寫入把關：每個 mutating 函式呼叫 `requireWrite('<page>')`；未登入→開登入框，登入但無該頁權限→alert 擋下。
+  - UI：`renderAuth()` 依 `canEdit()` 在 body 加 `can-items/can-vendors/can-data` 與 `li`(已登入) class；CSS `body:not(.can-X) .wr-X{display:none}` 隱藏該頁編輯鈕，`#noperm-X` 顯示唯讀提示。編輯控制項統一掛 `.wr-items/.wr-vendors/.wr-data`（不再用 `.wronly` 做逐頁）。
+  - 管理員在「帳號」頁用 chip 切換每帳號每頁權限（`toggleAccountPerm`）。`upAccount` 對缺 `perms` 欄位的舊 DB 自動降級。
+- 其他帳號存 `accounts` 表（雲端共享、即時同步）；本機模式存 `DB.accounts`。管理員在「帳號」分頁新增/刪除帳號、切換管理員角色、逐頁開關編輯權限。
+- 帳號管理（新增/刪除/切換角色/調整權限）另需 `requireAdmin()`。`.wronly` 僅剩「未登入時隱藏」的通用用途（`body.ro`）；逐頁隱藏改用 `.wr-X` + `can-X`。
+- 目前登入帳號記在 `localStorage['ground_pack_user']`；`currentUser={name,isAdmin,perms}`。
 - ⚠️ 與 `PASSCODE` 一樣是**前端門禁**：RLS 關閉時懂技術者仍可直接打 API 寫入。要真正鎖權限需改 Supabase Auth + RLS。
 
 ## 適配邏輯（核心）
