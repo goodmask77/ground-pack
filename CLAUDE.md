@@ -71,7 +71,11 @@ create table matches(item_id text references items(id) on delete cascade,
   hidden boolean default false,
   primary key(item_id, vendor_id));
 create table accounts(name text primary key, is_admin boolean default false, sort int default 0);
--- RLS 全關（公開讀寫設計）；realtime 已對四表開啟（vendors/items/matches/accounts）。
+create table history(id bigint generated always as identity primary key, ts timestamptz default now(),
+  user_name text, action text, target text, detail text);
+-- RLS 全關（公開讀寫設計）；realtime 已對五表開啟（vendors/items/matches/accounts/history）。
+-- history：修改紀錄。每個 mutating 函式呼叫 logHist(action,target,detail) 寫一筆（cloud→insert，本機→DB.history 保留最近 500）。
+--   表未建時 logHist 靜默略過、不影響編輯（沿用容錯設計）。「修改紀錄」分頁讀最近 500 筆顯示，管理員可清空。
 ```
 
 ## 帳號 / 登入（輕量門禁）
