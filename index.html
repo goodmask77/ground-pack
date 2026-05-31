@@ -273,8 +273,9 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
     <div class="note">截圖辨識與自動翻譯的累計用量與<b>估算</b>花費。每次呼叫也會記進「修改紀錄」。</div>
     <div id="aiusage" style="margin-top:8px"></div>
 
-    <h2><span class="n">建表</span>雲端資料表 SQL（產品模組）</h2>
-    <div class="note">若「產品管理」出現「尚未建立 products 表」警告，把下面整段貼到 <b>Supabase → SQL Editor</b> 執行一次（選 Run without RLS）。執行後重整本頁即可正常儲存產品 / 綁定 / 照片。</div>
+    <details style="margin-top:22px;border-top:1px solid var(--line2);padding-top:10px">
+    <summary style="cursor:pointer;font-family:var(--disp);font-weight:700;font-size:14px;color:var(--ink2)">⚙ 進階 / 重建用：雲端資料表建表 SQL（已建好，平常不用看）</summary>
+    <div class="note" style="margin-top:10px">需要在新環境重建、或某張表不見時才用：把下面整段貼到 <b>Supabase → SQL Editor</b> 執行（選 Run without RLS）。</div>
     <textarea readonly onclick="this.select()" style="width:100%;min-height:230px;border:1.5px solid var(--line2);padding:10px;font-family:var(--mono);font-size:12px;margin-top:8px;background:#fff">alter table items add column if not exists material text;
 
 create table if not exists products(
@@ -300,6 +301,7 @@ alter publication supabase_realtime add table products;
 alter publication supabase_realtime add table product_packaging;
 alter publication supabase_realtime add table packaging_images;</textarea>
     <div class="note" style="margin-top:8px">照片上傳另需在 <b>Storage</b> 建一個<b>公開 bucket：packaging-photos</b>，並開放 anon 的 SELECT/INSERT 政策。</div>
+    </details>
 
     <h2><span class="n">說明</span>適配類型對照</h2>
     <div id="legendcat" class="note" style="line-height:1.9"></div>
