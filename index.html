@@ -35,6 +35,10 @@ header{position:sticky;top:0;z-index:50;background:var(--paper);border-bottom:2p
 .tab{background:transparent;border:1.5px solid var(--line2);border-radius:0;padding:8px 14px;font-size:13px;font-weight:600;color:var(--ink2);transition:.12s}
 .tab:hover{border-color:var(--ink);color:var(--ink)}
 .tab.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.authbox{display:flex;align-items:center;gap:8px}
+.authbox .who{font-family:var(--mono);font-size:11px;color:var(--ink2);white-space:nowrap}
+body.ro .wronly{display:none!important}
+body.ro .qtab select,body.ro .qtab input,body.ro .starbtn,body.ro .x,body.ro .addv{pointer-events:none;opacity:.5}
 h2{font-family:var(--disp);font-weight:900;font-size:18px;letter-spacing:-.3px;margin:26px 0 12px;display:flex;align-items:center;gap:10px}
 h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff;padding:2px 8px;font-weight:600}
 .muted{color:var(--ink2)} .mono{font-family:var(--mono)}
@@ -136,7 +140,9 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
       <button class="tab" data-tab="items">需求 × 廠商對應</button>
       <button class="tab" data-tab="vendors">廠商</button>
       <button class="tab" data-tab="data">設定 / 備份</button>
+      <button class="tab hide" id="tab-accounts" data-tab="accounts">帳號</button>
     </div>
+    <div class="authbox" id="authbox"></div>
   </div>
 </header>
 
@@ -150,14 +156,14 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
 
   <section id="items" class="hide">
     <h2 style="margin-top:18px"><span class="n">需求</span>包材 / 耗材對應追蹤
-      <button class="btn acc sm" style="margin-left:auto" onclick="openItem()">＋ 新增品項</button></h2>
+      <button class="btn acc sm wronly" style="margin-left:auto" onclick="openItem()">＋ 新增品項</button></h2>
     <div class="note">點品項展開 → 系統依「適配類型」建議廠商（標 <span class="sug">建議</span>）。逐家填詢價狀態 / 單價 / MOQ / 交期，按 ★ 標記選定廠商。所有欄位即時同步給協作者。</div>
     <div id="itemlist"></div>
   </section>
 
   <section id="vendors" class="hide">
     <h2 style="margin-top:18px"><span class="n">廠商</span>包材供應商
-      <button class="btn acc sm" style="margin-left:auto" onclick="openVendor()">＋ 新增廠商</button></h2>
+      <button class="btn acc sm wronly" style="margin-left:auto" onclick="openVendor()">＋ 新增廠商</button></h2>
     <div id="vendorgrid" class="vgrid"></div>
   </section>
 
@@ -165,7 +171,7 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
     <h2 style="margin-top:18px"><span class="n">雲端</span>連線狀態</h2>
     <div id="cloudstatus" class="note"></div>
     <div class="row" style="margin-top:12px">
-      <button class="btn acc" onclick="seedCloud()">⤓ 匯入預設 14 廠商 ＋ 包材清單</button>
+      <button class="btn acc wronly" onclick="seedCloud()">⤓ 匯入預設 14 廠商 ＋ 包材清單</button>
       <button class="btn" id="refreshbtn" onclick="manualRefresh()">↻ 重新整理</button>
     </div>
 
@@ -173,14 +179,25 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
     <div class="note">雲端模式下，資料存在你的 Supabase；仍建議定期下載 JSON 留底。CSV 可在 Excel / Google Sheet 開啟。</div>
     <div class="row" style="margin-top:12px">
       <button class="btn" onclick="exportJSON()">⬇ 下載 JSON 備份</button>
-      <button class="btn" onclick="document.getElementById('imp').click()">⬆ 匯入 JSON（寫入雲端）</button>
+      <button class="btn wronly" onclick="document.getElementById('imp').click()">⬆ 匯入 JSON（寫入雲端）</button>
       <input type="file" id="imp" accept="application/json" class="hide" onchange="importJSON(event)">
       <button class="btn" onclick="exportCSV()">⬇ 匯出對應表 CSV</button>
-      <button class="btn ghost" onclick="resetAll()">↺ 清空並重置為預設</button>
+      <button class="btn ghost wronly" onclick="resetAll()">↺ 清空並重置為預設</button>
     </div>
 
     <h2><span class="n">說明</span>適配類型對照</h2>
     <div id="legendcat" class="note" style="line-height:1.9"></div>
+  </section>
+
+  <section id="accounts" class="hide">
+    <h2 style="margin-top:18px"><span class="n">帳號</span>帳號管理（僅管理員）</h2>
+    <div class="note">登入帳號即可編輯資料（<b>免密碼</b>）。沒有帳號的人只能<b>檢視</b>，不能修改。管理員可在此新增 / 刪除帳號、設定誰是管理員。</div>
+    <div class="row" style="margin-top:12px">
+      <input id="acc_name" placeholder="新帳號名稱" style="border:1.5px solid var(--ink);padding:7px 10px;background:#fff" onkeydown="if(event.key==='Enter')addAccount()">
+      <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" id="acc_admin" style="width:auto"> 設為管理員</label>
+      <button class="btn acc" onclick="addAccount()">＋ 新增帳號</button>
+    </div>
+    <div id="acclist" style="margin-top:14px"></div>
   </section>
 
   <div class="foot">GROUN:D · 口香糖俱樂部股份有限公司 · 包材採購對應追蹤（協作版）</div>
@@ -224,6 +241,19 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
     <button class="btn ghost" id="vm_del" onclick="delVendor()">刪除</button>
     <button class="btn ghost" onclick="closeModal('vendorModal')">取消</button>
     <button class="btn acc" onclick="saveVendor()">儲存</button>
+  </div>
+</div></div>
+
+<!-- LOGIN MODAL -->
+<div class="ov" id="loginModal"><div class="modal" style="max-width:400px">
+  <h3>登入</h3>
+  <div class="note" style="margin-top:0">輸入你的帳號名稱即可登入（<b>免密碼</b>）。沒有帳號請聯絡管理員新增。</div>
+  <div class="fld" style="margin-top:12px"><label>帳號</label>
+    <input id="login_name" list="login_list" placeholder="例：goodmask77" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()">
+    <datalist id="login_list"></datalist></div>
+  <div class="modacts">
+    <button class="btn ghost" onclick="closeModal('loginModal')">取消</button>
+    <button class="btn acc" onclick="doLogin()">登入</button>
   </div>
 </div></div>
 
@@ -336,6 +366,82 @@ let cloud=false, sb=null, DB={vendors:[],items:[],matches:{}};
 let openItems={}, editingItem=null, editingVendor=null, vmCats=[];
 const KEY='ground_pack_v1';
 
+/* ============ 帳號 / 登入 ============ */
+const SUPER_ADMIN='goodmask77';   // 內建管理員，永遠可登入、不可刪除
+const USERKEY='ground_pack_user'; // 本機記住目前登入帳號
+let currentUser=null;             // {name,isAdmin} 或 null（未登入＝唯讀）
+let accounts=[];                  // 額外帳號（不含內建管理員）[{name,is_admin,sort}]
+
+function isValidAccount(n){ return n===SUPER_ADMIN || accounts.some(a=>a.name===n); }
+function accountIsAdmin(n){ return n===SUPER_ADMIN || !!(accounts.find(a=>a.name===n)||{}).is_admin; }
+function requireWrite(){ if(currentUser) return true; openLogin(); return false; }
+function requireAdmin(){ if(currentUser&&currentUser.isAdmin) return true; alert('只有管理員可以管理帳號'); return false; }
+
+async function loadAccounts(){
+  if(cloud){
+    try{ const r=await sb.from('accounts').select('*').order('sort');
+      if(!r.error) accounts=(r.data||[]).map(a=>({name:a.name,is_admin:!!a.is_admin,sort:a.sort||0})); }
+    catch(e){ accounts=[]; }   // accounts 表還沒建也不影響：內建管理員仍可登入
+  } else {
+    accounts=((DB.accounts)||[]).map(a=>({name:a.name,is_admin:!!a.is_admin,sort:a.sort||0}));
+  }
+}
+async function upAccount(a){
+  if(cloud){ await sb.from('accounts').upsert({name:a.name,is_admin:!!a.is_admin,sort:a.sort||0}); }
+  else { if(!DB.accounts)DB.accounts=[]; const ex=DB.accounts.find(x=>x.name===a.name);
+    if(ex) Object.assign(ex,a); else DB.accounts.push(a); await persist(); }
+}
+async function delAccountStore(name){
+  if(cloud){ await sb.from('accounts').delete().eq('name',name); }
+  else { DB.accounts=((DB.accounts)||[]).filter(x=>x.name!==name); await persist(); }
+}
+
+function openLogin(){
+  document.getElementById('login_list').innerHTML=[SUPER_ADMIN,...accounts.map(a=>a.name)]
+    .map(n=>`<option value="${esc(n)}">`).join('');
+  document.getElementById('login_name').value='';
+  document.getElementById('loginModal').classList.add('on');
+  setTimeout(()=>document.getElementById('login_name').focus(),50);
+}
+function doLogin(){
+  const name=(document.getElementById('login_name').value||'').trim();
+  if(!name) return;
+  if(!isValidAccount(name)){ alert('查無此帳號。請聯絡管理員（'+SUPER_ADMIN+'）新增帳號。'); return; }
+  currentUser={name,isAdmin:accountIsAdmin(name)};
+  try{ localStorage.setItem(USERKEY,name); }catch(e){}
+  closeModal('loginModal'); renderAuth(); renderAll();
+}
+function logout(){ currentUser=null; try{ localStorage.removeItem(USERKEY);}catch(e){}
+  renderAuth(); renderAll(); }
+
+async function addAccount(){
+  if(!requireAdmin()) return;
+  const name=(document.getElementById('acc_name').value||'').trim();
+  const isAdm=document.getElementById('acc_admin').checked;
+  if(!name){ alert('請輸入帳號名稱'); return; }
+  if(name===SUPER_ADMIN || accounts.some(a=>a.name===name)){ alert('此帳號已存在'); return; }
+  await upAccount({name,is_admin:isAdm,sort:(accounts.reduce((m,x)=>Math.max(m,x.sort||0),0))+1});
+  await loadAccounts();
+  document.getElementById('acc_name').value=''; document.getElementById('acc_admin').checked=false;
+  renderAccounts();
+}
+async function removeAccount(name){
+  if(!requireAdmin()) return;
+  if(name===SUPER_ADMIN){ alert('內建管理員無法刪除'); return; }
+  if(!confirm('確定刪除帳號「'+name+'」？該人將失去編輯權限。')) return;
+  await delAccountStore(name); await loadAccounts();
+  if(currentUser && currentUser.name===name){ logout(); return; }
+  renderAccounts();
+}
+async function toggleAccountAdmin(name){
+  if(!requireAdmin()) return;
+  if(name===SUPER_ADMIN) return;
+  const a=accounts.find(x=>x.name===name); if(!a) return;
+  await upAccount({name:a.name,is_admin:!a.is_admin,sort:a.sort||0}); await loadAccounts();
+  if(currentUser) currentUser.isAdmin=accountIsAdmin(currentUser.name);
+  renderAuth(); renderAccounts();
+}
+
 /* ============ 本機儲存（fallback） ============ */
 async function persist(){ if(cloud) return;
   const raw=JSON.stringify(DB);
@@ -345,9 +451,9 @@ async function loadLocal(){ let raw=null;
   try{ const r=await window.storage.get(KEY); if(r&&r.value) raw=r.value; }
   catch(e){ try{ raw=localStorage.getItem(KEY);}catch(_){} }
   if(raw){ try{ DB=JSON.parse(raw);}catch(e){ seedLocal(); } } else seedLocal();
-  if(!DB.vendors)DB.vendors=[]; if(!DB.items)DB.items=[]; if(!DB.matches)DB.matches={}; }
+  if(!DB.vendors)DB.vendors=[]; if(!DB.items)DB.items=[]; if(!DB.matches)DB.matches={}; if(!DB.accounts)DB.accounts=[]; }
 function seedLocal(){ DB={vendors:JSON.parse(JSON.stringify(SEED_VENDORS)),
-  items:JSON.parse(JSON.stringify(SEED_ITEMS)), matches:{}}; }
+  items:JSON.parse(JSON.stringify(SEED_ITEMS)), matches:{}, accounts:[]}; }
 
 /* ============ 雲端層 ============ */
 async function cloudLoad(){
@@ -373,7 +479,7 @@ async function upMatch(iid,m){ if(!cloud) return persist();
   await sb.from('matches').upsert({item_id:iid,vendor_id:m.vendorId,status:m.status,price:m.price,moq:m.moq,lead:m.lead,note:m.note,chosen:!!m.chosen}); }
 async function delMatchCloud(iid,vid){ if(!cloud) return persist(); await sb.from('matches').delete().eq('item_id',iid).eq('vendor_id',vid); }
 
-async function seedCloud(){
+async function seedCloud(){ if(!requireWrite())return;
   if(!cloud){ seedLocal(); await persist(); renderAll(); alert('（本機模式）已載入預設資料'); return; }
   if(!confirm('將預設的 14 家廠商與包材清單寫入雲端（相同 id 會被覆蓋）。繼續？')) return;
   await sb.from('vendors').upsert(SEED_VENDORS.map((v,i)=>({id:v.id,name:v.name,en:v.en,reg:v.reg,url:v.url,cats:v.cats,tags:v.tags,note:v.note,sort:i})));
@@ -393,12 +499,14 @@ async function wipeCloud(){
   await sb.from('vendors').delete().neq('id','');
 }
 let rtTimer; function refetchSoon(){ if(!cloud) return; clearTimeout(rtTimer);
-  rtTimer=setTimeout(async()=>{ try{ await cloudLoad(); renderAll(); }catch(e){} },500); }
+  rtTimer=setTimeout(async()=>{ try{ await cloudLoad(); await loadAccounts(); renderAll();
+    if(!document.getElementById('accounts').classList.contains('hide')) renderAccounts(); }catch(e){} },500); }
 function subscribe(){ if(!cloud) return;
   sb.channel('rt')
     .on('postgres_changes',{event:'*',schema:'public',table:'vendors'},refetchSoon)
     .on('postgres_changes',{event:'*',schema:'public',table:'items'},refetchSoon)
     .on('postgres_changes',{event:'*',schema:'public',table:'matches'},refetchSoon)
+    .on('postgres_changes',{event:'*',schema:'public',table:'accounts'},refetchSoon)
     .subscribe();
 }
 async function manualRefresh(){ if(cloud){ try{ await cloudLoad(); renderAll(); }catch(e){ alert('重新整理失敗'); } } else { await loadLocal(); renderAll(); } }
@@ -462,7 +570,7 @@ function itemHTML(it){
       <span class="imeta">
         ${chV?`<span class="chosen-tag">★ ${esc(chV.en||chV.name)}${chosen.price?' · $'+esc(chosen.price):''}</span>`:''}
         <span class="pill ${STATUS_CLASS[st]}">${st}</span>
-        <button class="btn ghost sm" onclick="event.stopPropagation();openItem('${it.id}')">編輯</button>
+        <button class="btn ghost sm wronly" onclick="event.stopPropagation();openItem('${it.id}')">編輯</button>
       </span>
     </div>
     <div class="idet">
@@ -513,7 +621,7 @@ function renderVendors(){
         <span class="t cap">可對應 ${covered} 項需求</span></div>
       <div class="vcat">${(v.cats||[]).map(c=>`<span class="vc">${CAT[c]||c}</span>`).join('')||'<span class="muted" style="font-size:11px">未設定供應類別</span>'}</div>
       ${v.note?`<div class="vnote">${esc(v.note)}</div>`:''}
-      <div class="vacts"><button class="btn sm" onclick="openVendor('${v.id}')">編輯</button></div></div>`;
+      <div class="vacts"><button class="btn sm wronly" onclick="openVendor('${v.id}')">編輯</button></div></div>`;
   });
   document.getElementById('vendorgrid').innerHTML=h;
 }
@@ -525,11 +633,11 @@ function getMatch(iid,vid){ if(!DB.matches[iid]) DB.matches[iid]=[];
   let m=DB.matches[iid].find(x=>x.vendorId===vid);
   if(!m){ m={vendorId:vid,status:'未詢價',price:'',moq:'',lead:'',note:'',chosen:false}; DB.matches[iid].push(m); }
   return m; }
-async function upd(iid,vid,f,val){ const m=getMatch(iid,vid); m[f]=val; await upMatch(iid,m); refreshItem(iid); }
-async function addMatch(iid,vid){ const m=getMatch(iid,vid); await upMatch(iid,m); refreshItem(iid); }
-async function rmMatch(iid,vid){ if(DB.matches[iid]) DB.matches[iid]=DB.matches[iid].filter(m=>m.vendorId!==vid);
+async function upd(iid,vid,f,val){ if(!requireWrite())return; const m=getMatch(iid,vid); m[f]=val; await upMatch(iid,m); refreshItem(iid); }
+async function addMatch(iid,vid){ if(!requireWrite())return; const m=getMatch(iid,vid); await upMatch(iid,m); refreshItem(iid); }
+async function rmMatch(iid,vid){ if(!requireWrite())return; if(DB.matches[iid]) DB.matches[iid]=DB.matches[iid].filter(m=>m.vendorId!==vid);
   await delMatchCloud(iid,vid); refreshItem(iid); }
-async function setChosen(iid,vid){ const m=getMatch(iid,vid); const was=m.chosen;
+async function setChosen(iid,vid){ if(!requireWrite())return; const m=getMatch(iid,vid); const was=m.chosen;
   (DB.matches[iid]||[]).forEach(x=>x.chosen=false); m.chosen=!was;
   if(m.chosen && m.status==='未詢價') m.status='已選定';
   if(cloud){ for(const x of DB.matches[iid]) await upMatch(iid,x); } else await persist();
@@ -538,7 +646,7 @@ function refreshItem(iid){ const it=DB.items.find(i=>i.id===iid); if(!it) return
   openItems[iid]=true; const old=document.getElementById('item-'+iid);
   const tmp=document.createElement('div'); tmp.innerHTML=itemHTML(it); old.replaceWith(tmp.firstElementChild); }
 
-function openItem(id){ editingItem=id||null;
+function openItem(id){ if(!requireWrite())return; editingItem=id||null;
   const gSel=document.getElementById('im_group'), tSel=document.getElementById('im_type');
   gSel.innerHTML=GROUPS.map(g=>`<option>${g}</option>`).join('');
   tSel.innerHTML=CATKEYS.map(c=>`<option value="${c}">${CAT[c]}</option>`).join('');
@@ -550,7 +658,7 @@ function openItem(id){ editingItem=id||null;
   else { im_name.value='';im_spec.value='';im_prod.value='';im_note.value=''; gSel.value=GROUPS[0]; tSel.value='box'; }
   document.getElementById('itemModal').classList.add('on');
 }
-async function saveItem(){
+async function saveItem(){ if(!requireWrite())return;
   const o={name:im_name.value.trim(),group:im_group.value,type:im_type.value,
     spec:im_spec.value.trim(),prod:im_prod.value.trim(),note:im_note.value.trim()};
   if(!o.name){ alert('請輸入品項名稱'); return; }
@@ -559,11 +667,11 @@ async function saveItem(){
   else { o.id='i'+Date.now(); o.sort=(DB.items.reduce((m,x)=>Math.max(m,x.sort||0),0))+1; DB.items.push(o); target=o; }
   await upItem(target); closeModal('itemModal'); renderItems(); renderDash();
 }
-async function delItem(){ if(!editingItem||!confirm('確定刪除此品項？')) return;
+async function delItem(){ if(!requireWrite())return; if(!editingItem||!confirm('確定刪除此品項？')) return;
   const id=editingItem; DB.items=DB.items.filter(i=>i.id!==id); delete DB.matches[id];
   await delItemCloud(id); closeModal('itemModal'); renderItems(); renderDash(); }
 
-function openVendor(id){ editingVendor=id||null;
+function openVendor(id){ if(!requireWrite())return; editingVendor=id||null;
   const v=id?DB.vendors.find(x=>x.id===id):null; vmCats=v?[...(v.cats||[])]:[];
   document.getElementById('vm_cats').innerHTML=CATKEYS.map(c=>
     `<span class="chip ${vmCats.includes(c)?'on':''}" data-c="${c}" onclick="toggleCat('${c}',this)">${CAT[c]}</span>`).join('');
@@ -574,7 +682,7 @@ function openVendor(id){ editingVendor=id||null;
   document.getElementById('vendorModal').classList.add('on');
 }
 function toggleCat(c,el){ if(vmCats.includes(c)) vmCats=vmCats.filter(x=>x!==c); else vmCats.push(c); el.classList.toggle('on'); }
-async function saveVendor(){
+async function saveVendor(){ if(!requireWrite())return;
   const o={name:vm_name.value.trim(),en:vm_en.value.trim(),reg:vm_reg.value.trim(),
     url:vm_url.value.trim(),cats:[...vmCats],
     tags:vm_tags.value.split(',').map(s=>s.trim()).filter(Boolean),note:vm_note.value.trim()};
@@ -584,7 +692,7 @@ async function saveVendor(){
   else { o.id='v'+Date.now(); o.sort=(DB.vendors.reduce((m,x)=>Math.max(m,x.sort||0),0))+1; DB.vendors.push(o); target=o; }
   await upVendor(target); closeModal('vendorModal'); renderVendors(); renderDash();
 }
-async function delVendor(){ if(!editingVendor||!confirm('確定刪除此廠商？相關詢價紀錄也會移除。')) return;
+async function delVendor(){ if(!requireWrite())return; if(!editingVendor||!confirm('確定刪除此廠商？相關詢價紀錄也會移除。')) return;
   const id=editingVendor; DB.vendors=DB.vendors.filter(v=>v.id!==id);
   Object.keys(DB.matches).forEach(k=>DB.matches[k]=DB.matches[k].filter(m=>m.vendorId!==id));
   await delVendorCloud(id); closeModal('vendorModal'); renderVendors(); renderItems(); renderDash(); }
@@ -593,20 +701,21 @@ function closeModal(id){ document.getElementById(id).classList.remove('on'); }
 /* ===== Tabs ===== */
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on')); t.classList.add('on');
-  ['dash','items','vendors','data'].forEach(s=>document.getElementById(s).classList.add('hide'));
+  ['dash','items','vendors','data','accounts'].forEach(s=>document.getElementById(s).classList.add('hide'));
   document.getElementById(t.dataset.tab).classList.remove('hide');
   if(t.dataset.tab==='dash') renderDash();
   if(t.dataset.tab==='items') renderItems();
   if(t.dataset.tab==='vendors') renderVendors();
+  if(t.dataset.tab==='accounts') renderAccounts();
 });
 
 /* ===== Export / Import ===== */
 function exportJSON(){ dl(JSON.stringify(DB,null,2),'GROUND-packaging-'+today()+'.json','application/json'); }
-async function importJSON(e){ const f=e.target.files[0]; if(!f) return; const r=new FileReader();
+async function importJSON(e){ if(!requireWrite()){ e.target.value=''; return; } const f=e.target.files[0]; if(!f) return; const r=new FileReader();
   r.onload=async()=>{ try{ const d=JSON.parse(r.result); if(!d.vendors||!d.items) throw 0;
-    DB=d; if(!DB.matches)DB.matches={};
+    DB=d; if(!DB.matches)DB.matches={}; if(!DB.accounts)DB.accounts=[];
     if(cloud){ await pushAllToCloud(); await cloudLoad(); } else await persist();
-    renderAll(); alert(cloud?'已匯入並寫入雲端':'已匯入'); }
+    await loadAccounts(); renderAuth(); renderAll(); alert(cloud?'已匯入並寫入雲端':'已匯入'); }
     catch(err){ alert('檔案格式不正確'); } }; r.readAsText(f); e.target.value=''; }
 function exportCSV(){
   const rows=[['群組','品項','規格','適配類型','對應產品','廠商','狀態','單價','MOQ/規格','交期','選定','備註']];
@@ -619,7 +728,7 @@ function exportCSV(){
   const csv='\ufeff'+rows.map(r=>r.map(c=>'"'+String(c==null?'':c).replace(/"/g,'""')+'"').join(',')).join('\n');
   dl(csv,'GROUND-packaging-matrix-'+today()+'.csv','text/csv');
 }
-async function resetAll(){ if(!confirm('清空並回到預設的 14 家廠商與包材清單。此動作會覆蓋目前資料，確定？')) return;
+async function resetAll(){ if(!requireWrite())return; if(!confirm('清空並回到預設的 14 家廠商與包材清單。此動作會覆蓋目前資料，確定？')) return;
   if(cloud){ await wipeCloud(); await seedCloud(); } else { seedLocal(); await persist(); renderAll(); } }
 function dl(content,name,type){ const b=new Blob([content],{type}); const u=URL.createObjectURL(b);
   const a=document.createElement('a'); a.href=u; a.download=name; a.click(); URL.revokeObjectURL(u); }
@@ -643,7 +752,38 @@ function renderCloudStatus(){ const el=document.getElementById('cloudstatus');
 }
 function renderLegend(){ document.getElementById('legendcat').innerHTML=CATKEYS.map(c=>
   `<span class="vc" style="margin:2px 4px 2px 0;display:inline-block"><b class="mono">${c}</b> = ${CAT[c]}</span>`).join(''); }
-function renderAll(){ renderWarn(); renderCloudStatus(); renderDash(); renderItems(); renderVendors(); renderLegend(); }
+function renderAuth(){
+  if(currentUser){
+    if(!isValidAccount(currentUser.name)){ currentUser=null; try{localStorage.removeItem(USERKEY);}catch(e){} }
+    else currentUser.isAdmin=accountIsAdmin(currentUser.name);
+  }
+  const el=document.getElementById('authbox');
+  if(currentUser){
+    el.innerHTML=`<span class="who">👤 ${esc(currentUser.name)}${currentUser.isAdmin?' · 管理員':''}</span>`
+      +`<button class="btn ghost sm" onclick="logout()">登出</button>`;
+  } else {
+    el.innerHTML=`<span class="who">唯讀模式</span><button class="btn acc sm" onclick="openLogin()">登入</button>`;
+  }
+  document.body.classList.toggle('ro', !currentUser);
+  const at=document.getElementById('tab-accounts');
+  const showAcc=!!(currentUser&&currentUser.isAdmin);
+  at.classList.toggle('hide', !showAcc);
+  if(!showAcc && !document.getElementById('accounts').classList.contains('hide')){
+    document.querySelector('.tab[data-tab="dash"]').click();
+  }
+}
+function renderAccounts(){
+  const el=document.getElementById('acclist'); if(!el) return;
+  if(!(currentUser&&currentUser.isAdmin)){ el.innerHTML='<div class="note">需以管理員身分登入。</div>'; return; }
+  let h='<table class="qtab"><thead><tr><th>帳號</th><th>角色（點擊切換）</th><th></th></tr></thead><tbody>';
+  h+=`<tr><td class="vn">${esc(SUPER_ADMIN)} <span class="sug">內建</span></td><td>管理員</td><td></td></tr>`;
+  accounts.forEach(a=>{ h+=`<tr><td class="vn">${esc(a.name)}</td>
+    <td><button class="btn ghost sm" onclick="toggleAccountAdmin('${esc(a.name)}')">${a.is_admin?'管理員 ⇄':'一般 ⇄'}</button></td>
+    <td><button class="x" title="刪除帳號" onclick="removeAccount('${esc(a.name)}')">×</button></td></tr>`; });
+  h+='</tbody></table>';
+  el.innerHTML=h;
+}
+function renderAll(){ renderAuth(); renderWarn(); renderCloudStatus(); renderDash(); renderItems(); renderVendors(); renderLegend(); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 /* ===== 啟動 ===== */
@@ -653,6 +793,9 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;',
     try{ sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY); cloud=true; await cloudLoad(); subscribe(); }
     catch(e){ cloud=false; await loadLocal(); alert('雲端連線失敗，暫以本機模式運作。請確認金鑰與資料表設定。'); }
   } else { await loadLocal(); }
+  await loadAccounts();
+  const saved=(()=>{ try{ return localStorage.getItem(USERKEY);}catch(e){ return null; } })();
+  if(saved && isValidAccount(saved)) currentUser={name:saved,isAdmin:accountIsAdmin(saved)};
   setMode(); renderAll();
 })();
 </script>

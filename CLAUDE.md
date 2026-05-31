@@ -68,8 +68,18 @@ create table matches(item_id text references items(id) on delete cascade,
   vendor_id text references vendors(id) on delete cascade,
   status text, price text, moq text, lead text, note text, chosen boolean default false,
   primary key(item_id, vendor_id));
--- RLS 全關（公開讀寫設計）；realtime 已對三表開啟。
+create table accounts(name text primary key, is_admin boolean default false, sort int default 0);
+-- RLS 全關（公開讀寫設計）；realtime 已對四表開啟（vendors/items/matches/accounts）。
 ```
+
+## 帳號 / 登入（輕量門禁）
+
+- **未登入 = 唯讀**（看得到資料、改不了）；**登入（只輸帳號名、免密碼）= 可編輯**。
+- 內建管理員常數 `SUPER_ADMIN='goodmask77'`：永遠可登入、不可刪除、即使 `accounts` 表還沒建也能用（bootstrap 安全）。
+- 其他帳號存 `accounts` 表（雲端共享、即時同步）；本機模式存 `DB.accounts`。管理員在「帳號」分頁新增/刪除帳號、切換管理員角色。
+- 寫入把關：所有 mutating 函式開頭呼叫 `requireWrite()`（未登入→開登入框並中止）；帳號管理另需 `requireAdmin()`。UI 上 `.wronly` 按鈕在 `body.ro`（未登入）時隱藏。
+- 目前登入帳號記在 `localStorage['ground_pack_user']`。
+- ⚠️ 與 `PASSCODE` 一樣是**前端門禁**：RLS 關閉時懂技術者仍可直接打 API 寫入。要真正鎖權限需改 Supabase Auth + RLS。
 
 ## 適配邏輯（核心）
 
