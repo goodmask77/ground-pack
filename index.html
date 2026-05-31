@@ -756,11 +756,13 @@ function catList(){
   const fromTable=(DB.cats||[]).slice().sort((a,b)=>(a.sort||0)-(b.sort||0)).map(c=>c.name);
   const base=fromTable.length?fromTable:PRODUCT_CATS.slice();
   const extra=[...new Set((DB.products||[]).map(p=>p.category||'').filter(Boolean))].filter(c=>!base.includes(c));
-  return base.concat(extra);
+  return [...new Set(base.concat(extra))];
 }
 async function saveCatOrder(names){
+  names=[...new Set(names.filter(n=>n && n!=='未分類'))];   // 去重；未分類為虛擬桶不存表
   DB.cats=names.map((n,i)=>({name:n,sort:i}));
-  if(cloud){ try{ await sb.from('categories').upsert(names.map((n,i)=>({name:n,sort:i}))); }catch(e){} } else await persist();
+  if(cloud){ try{ await sb.from('categories').delete().neq('name',' __none__');   // 整表重寫，避免殘留/重複
+    if(names.length) await sb.from('categories').insert(names.map((n,i)=>({name:n,sort:i}))); }catch(e){} } else await persist();
 }
 async function delCatRow(name){ if(cloud){ try{ await sb.from('categories').delete().eq('name',name); }catch(e){} } else await persist(); }
 async function delProductCloud(id){ if(!cloud) return persist();
@@ -1147,8 +1149,9 @@ async function renameCategory(oldName){ if(!requireWrite('products'))return;
   if(cloud && cloudMissingCats){ alert(catSqlMsg()); return; }
   const name=(prompt('改類別名稱：', oldName)||'').trim(); if(!name||name===oldName) return;
   if(catList().includes(name)){ alert('已有同名類別'); return; }
+  const newOrder=catList().map(c=>c===oldName?name:c);   // 先依「改名前」的清單算好順序，避免重複
   const affected=DB.products.filter(p=>(p.category||'未分類')===oldName); affected.forEach(p=>p.category=name);
-  await saveCatOrder(catList().map(c=>c===oldName?name:c)); await delCatRow(oldName);
+  await saveCatOrder(newOrder); await delCatRow(oldName);
   if(affected.length) await upProductsBatch(affected);
   if(selCat===oldName) selCat=name;
   renderProducts(); logHist('類別改名', oldName+' → '+name, affected.length+' 項產品'); }
