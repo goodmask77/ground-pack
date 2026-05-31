@@ -20,10 +20,13 @@ GROUN:D 連鎖速食的「產品 → 包材 → 供應商」採購對應追蹤�
 
 ```
 ground-pack/
-├── index.html   ← 整個 App（編輯這裡）
-├── CLAUDE.md    ← 本檔
-└── .gitignore   ← 排除 .vercel / .DS_Store
+├── index.html      ← 整個前端 App（編輯這裡）
+├── api/extract.js  ← Vercel serverless function：Claude 視覺辨識，把產品截圖解析成 JSON
+├── CLAUDE.md       ← 本檔
+└── .gitignore      ← 排除 .vercel / .DS_Store
 ```
+
+- `api/extract.js` 用 **CommonJS**（`module.exports`，因無 package.json type:module）。需 Vercel 環境變數 `ANTHROPIC_API_KEY`（可選 `EXTRACT_MODEL`，預設 claude-sonnet-4-6）。同網域 `POST /api/extract`，本機 file:// 開啟無法用。
 
 ## 部署流程（不要再用 vercel --prod）
 
@@ -126,6 +129,7 @@ create table packaging_images(id bigint generated always as identity primary key
 - 詳情用 modal：`productDetail()`（綁定/解綁包材）、`packDetail()`（照片上傳/刪除、被哪些產品用、對應供應商）。`vendorsForPack()`＝該包材的 match 供應商 ∪ 依 type 建議的供應商。
 - 照片：`uploadPhoto()` 上傳到 Storage bucket `PHOTO_BUCKET`（'packaging-photos'）→ `addImageRow` 寫 packaging_images；本機模式存 base64。
 - 寫入把關：產品/綁定走 `requireWrite('products')`；包材主檔與照片走 `requireWrite('items')`。
+- **批量上傳產品**（產品管理「⤓ 批量上傳」）：兩模式共用 `batchRows` ＋ `renderBatchRows()` 可編輯預覽 → `batchImport()` 經 `upProductsBatch` 一次寫入。① 截圖辨識：`batchRecognize()` 把圖 `downscaleImage` 後 POST `/api/extract`，回傳產品累加進預覽；視窗開啟時 document paste 事件可直接貼上截圖。② 貼上文字：`batchParseText()` 逗號/Tab 分欄。
 
 ## 改程式時的注意事項
 
