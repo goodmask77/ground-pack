@@ -1097,10 +1097,11 @@ function renderProducts(){
     ${editable?'<span class="muted" style="font-size:12px;margin-left:6px">⠿ 拖曳排序　▶ 點箭頭折疊</span><button class="btn ghost sm wr-products" style="margin-left:auto" onclick="addCategory()">＋ 新增類別</button>':''}</div>`;
   cats.forEach(c=>{ const ps=list.filter(p=>(p.category||'未分類')===c).sort((a,b)=>(a.sort||0)-(b.sort||0));
     const collapsed=!!collapsedCats[c];
-    const caret=`<span style="cursor:pointer;width:16px;display:inline-block;text-align:center" onclick="event.stopPropagation();toggleCat('${jsEsc(c)}')">${collapsed?'▶':'▼'}</span>`;
+    const titleSpan=`<span style="cursor:pointer;flex:1" onclick="toggleCat('${jsEsc(c)}')">${collapsed?'▶':'▼'} ${esc(c)} <span class="c">${ps.length} 項</span></span>`;
+    const photoBtn=`<button class="btn ghost sm" title="右側顯示此類別包材照片" onclick="event.stopPropagation();selectCat('${jsEsc(c)}')">${c===selCat?'★ 包材照片':'看包材照片'}</button>`;
     h += editable
-      ? `<div class="acat click ${c===selCat?'sel':''}" draggable="true" ondragstart="dragCatStart(event,'${jsEsc(c)}')" ondragover="event.preventDefault()" ondrop="dragCatDrop(event,'${jsEsc(c)}')" onclick="selectCat('${jsEsc(c)}')">${caret}<span style="cursor:grab">⠿</span> ${esc(c)} <span class="c">${ps.length} 項</span><span style="margin-left:auto;display:flex;gap:6px;align-items:center">${c===selCat?'<span class="badge acc">▶ 看包材照片</span>':'<span class="muted" style="font-size:11px">點看包材照片</span>'}<button class="btn ghost sm" title="改名" onclick="event.stopPropagation();renameCategory('${jsEsc(c)}')">✎</button><button class="x" title="刪除類別" onclick="event.stopPropagation();deleteCategory('${jsEsc(c)}')">×</button></span></div>`
-      : `<div class="acat click ${c===selCat?'sel':''}" onclick="selectCat('${jsEsc(c)}')">${caret}${esc(c)} <span class="c">${ps.length} 項</span>${c===selCat?'<span class="badge acc" style="margin-left:auto">▶ 右側看包材照片</span>':'<span class="muted" style="margin-left:auto;font-size:11px">點此看包材照片</span>'}</div>`;
+      ? `<div class="acat ${c===selCat?'sel':''}" draggable="true" ondragstart="dragCatStart(event,'${jsEsc(c)}')" ondragover="event.preventDefault()" ondrop="dragCatDrop(event,'${jsEsc(c)}')"><span style="cursor:grab;color:var(--ink2)">⠿</span> ${titleSpan}<span style="display:flex;gap:6px;align-items:center">${photoBtn}<button class="btn ghost sm" title="改名" onclick="event.stopPropagation();renameCategory('${jsEsc(c)}')">✎</button><button class="x" title="刪除類別" onclick="event.stopPropagation();deleteCategory('${jsEsc(c)}')">×</button></span></div>`
+      : `<div class="acat ${c===selCat?'sel':''}">${titleSpan}${photoBtn}</div>`;
     if(collapsed) return;
     if(!ps.length){ h+='<div class="muted" style="font-size:12px;padding:6px 2px 2px">（尚無產品）</div>'; return; }
     h+='<table class="atable"><thead><tr>'+(editable?'<th style="width:18px"></th>':'')+'<th>品名</th><th>單位</th><th>售價</th><th>包材</th><th>狀態</th><th></th></tr></thead><tbody>';
@@ -1254,7 +1255,7 @@ function renderTagFilter(){ const el=document.getElementById('tagfilter'); if(!e
     + tags.map(t=>`<span class="chip ${selTag===t?'on':''}" onclick="setTagFilter('${jsEsc(t)}')">#${esc(t)}</span>`).join('')
     + (selTag?` <span class="linkish" style="font-size:12px" onclick="setTagFilter(null)">清除</span>`:''); }
 function setTagFilter(t){ selTag=(selTag===t)?null:t; renderProducts(); }
-function toggleCat(c){ collapsedCats[c]=!collapsedCats[c]; renderProducts(); }
+function toggleCat(c){ collapsedCats[c]=!collapsedCats[c]; if(!collapsedCats[c]) selCat=c; renderProducts(); }
 function setAllCats(collapse){ const cs=catList().concat('未分類'); cs.forEach(c=>collapsedCats[c]=collapse); renderProducts(); }
 
 async function autoTranslateEn(force){
