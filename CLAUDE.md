@@ -4,7 +4,9 @@
 
 ## 這是什麼
 
-GROUN:D 連鎖速食的「包材／耗材採購對應與追蹤系統」。功能：列出所有需求品項 → 系統依品項類型自動建議適配的供應商 → 逐家追蹤詢價狀態 / 單價 / MOQ / 交期 → 標記選定廠商。多人即時協作。
+GROUN:D 連鎖速食的「產品 → 包材 → 供應商」採購對應追蹤系統。核心階層：**產品(Product) → 包材(Packaging) → 供應商(Supplier)**。產品發散出所需包材，包材再對應供應商；可從產品、包材、供應商三種視角查看。多人即時協作。
+
+主選單：總覽 / 產品管理 / 需求 × 廠商對應（包材主檔＋詢價）/ 廠商 / 分析中心 / 設定備份 / 修改紀錄 / 帳號。
 
 - 品牌：**GROUN:D**（雙品牌系統 HAPPINESS／GROUN:D）。
 - 法律實體：**喬亞國際餐飲股份有限公司**。產出對外文件需標公司名時，用此正式名稱，不要寫成 GROUN:D。
@@ -63,8 +65,9 @@ const PASSCODE = '';               // 留空=不設密碼門禁；填字串=開�
 ```sql
 create table vendors(id text primary key, name text, en text, reg text, url text,
   cats jsonb default '[]'::jsonb, tags jsonb default '[]'::jsonb, note text, sort int default 0);
+-- items＝包材主檔（沿用）。material 為材質欄位（後加）。
 create table items(id text primary key, grp text, name text, type text, spec text,
-  prod text, note text, sort int default 0);
+  prod text, note text, sort int default 0, material text);
 create table matches(item_id text references items(id) on delete cascade,
   vendor_id text references vendors(id) on delete cascade,
   status text, price text, moq text, lead text, note text, chosen boolean default false,
@@ -74,7 +77,17 @@ create table accounts(name text primary key, is_admin boolean default false, sor
   perms jsonb default '[]'::jsonb);  -- perms：該帳號可編輯的頁面 key 陣列，子集 of ['items','vendors','data']
 create table history(id bigint generated always as identity primary key, ts timestamptz default now(),
   user_name text, action text, target text, detail text);
--- RLS 全關（公開讀寫設計）；realtime 已對五表開啟（vendors/items/matches/accounts/history）。
+-- 產品模組：
+create table products(id text primary key, category text, name text, english_name text,
+  price text, note text, is_active boolean default true, sort int default 0);
+create table product_packaging(product_id text references products(id) on delete cascade,
+  packaging_id text references items(id) on delete cascade, sort int default 0,
+  primary key(product_id, packaging_id));            -- 產品↔包材 多對多
+create table packaging_images(id bigint generated always as identity primary key,
+  packaging_id text references items(id) on delete cascade,
+  image_url text, label text, sort_order int default 0);   -- 包材照片（URL 指向 Storage）
+-- RLS 全關（公開讀寫設計）；realtime 對所有表開啟（vendors/items/matches/accounts/history/products/product_packaging/packaging_images）。
+-- 照片存 Supabase Storage 公開 bucket「packaging-photos」；前端 sb.storage.upload 上傳、getPublicUrl 取網址，URL 存 packaging_images。
 -- history：修改紀錄。每個 mutating 函式呼叫 logHist(action,target,detail) 寫一筆（cloud→insert，本機→DB.history 保留最近 500）。
 --   表未建時 logHist 靜默略過、不影響編輯（沿用容錯設計）。「修改紀錄」分頁讀最近 500 筆顯示，管理員可清空。
 ```
@@ -83,7 +96,7 @@ create table history(id bigint generated always as identity primary key, ts time
 
 - **未登入 = 唯讀**；**登入（只輸帳號名、免密碼）後預設仍唯讀**，要由管理員逐頁開放編輯權限。
 - 內建管理員常數 `SUPER_ADMIN='goodmask77'`：永遠可登入、不可刪除、即使 `accounts` 表還沒建也能用（bootstrap 安全）。
-- **逐頁編輯權限**：可控制的頁面 `PAGES=['items','vendors','data']`（需求對應 / 廠商 / 設定備份）。
+- **逐頁編輯權限**：可控制的頁面 `PAGES=['products','items','vendors','data']`（產品管理 / 包材對應 / 廠商 / 設定備份）。
   - 每帳號 `perms` 陣列存可編輯頁面；管理員（含內建）`accountPerms()` 一律回傳全部頁面。新帳號預設 `perms:[]`（不能改）。
   - 寫入把關：每個 mutating 函式呼叫 `requireWrite('<page>')`；未登入→開登入框，登入但無該頁權限→alert 擋下。
   - UI：`renderAuth()` 依 `canEdit()` 在 body 加 `can-items/can-vendors/can-data` 與 `li`(已登入) class；CSS `body:not(.can-X) .wr-X{display:none}` 隱藏該頁編輯鈕，`#noperm-X` 顯示唯讀提示。編輯控制項統一掛 `.wr-items/.wr-vendors/.wr-data`（不再用 `.wronly` 做逐頁）。
@@ -104,6 +117,15 @@ create table history(id bigint generated always as identity primary key, ts time
 - 品項群組 `GROUPS`：單品包材 / 包裝袋 / 醬料包 / 餐具 / 清潔 / 防護（僅顯示用分組）。
 - 詢價狀態 `STATUS`：未詢價 / 詢價中 / 已報價 / 打樣中 / 已選定 / 已下單 / 不適用。
 - 預設種子資料：14 家廠商 + 38 品項，寫在 `SEED_VENDORS` / `SEED_ITEMS`。雲端初始化靠「設定/備份」分頁的「匯入預設資料」按鈕。
+
+## 產品模組（前端）
+
+- 狀態：`DB.products`（[{id,category,name,en,price,note,active,sort}]）、`DB.prodPack`（product_id→[packaging_id]）、`DB.images`（packaging_id→[{id,url,label,sort}]）。`cloudLoad` 對這三張表各自 try/catch，未建表不影響其他資料。
+- 產品類別 `PRODUCT_CATS`（Pizza/早餐/越南三明治/速食/副餐/沙拉飯碗/湯品/甜點/冰淇淋/飲品），允許自訂。
+- 頁面：**產品管理**（`renderProducts`，依類別分組卡片、搜尋/篩選）、**分析中心**（`renderAnalysis`＋`anMode`：p2p 產品→包材 / k2p 包材→產品 / share 共用率 / coverage 供應商覆蓋率 / gaps 缺漏）。
+- 詳情用 modal：`productDetail()`（綁定/解綁包材）、`packDetail()`（照片上傳/刪除、被哪些產品用、對應供應商）。`vendorsForPack()`＝該包材的 match 供應商 ∪ 依 type 建議的供應商。
+- 照片：`uploadPhoto()` 上傳到 Storage bucket `PHOTO_BUCKET`（'packaging-photos'）→ `addImageRow` 寫 packaging_images；本機模式存 base64。
+- 寫入把關：產品/綁定走 `requireWrite('products')`；包材主檔與照片走 `requireWrite('items')`。
 
 ## 改程式時的注意事項
 

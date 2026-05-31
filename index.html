@@ -41,12 +41,13 @@ header{position:sticky;top:0;z-index:50;background:var(--paper);border-bottom:2p
 #robar .btn{margin-left:auto}
 body.ro .wronly{display:none!important}
 /* 逐頁編輯權限：沒有該頁權限（未登入或未授權）就隱藏編輯鈕、禁用輸入 */
+body:not(.can-products) .wr-products{display:none!important}
 body:not(.can-items) .wr-items{display:none!important}
 body:not(.can-vendors) .wr-vendors{display:none!important}
 body:not(.can-data) .wr-data{display:none!important}
 body:not(.can-items) #items .qtab select,body:not(.can-items) #items .qtab input,body:not(.can-items) #items .starbtn,body:not(.can-items) #items .x,body:not(.can-items) #items .addv{pointer-events:none;opacity:.5}
-#noperm-items,#noperm-vendors,#noperm-data{display:none}
-body.li:not(.can-items) #noperm-items,body.li:not(.can-vendors) #noperm-vendors,body.li:not(.can-data) #noperm-data{display:flex}
+#noperm-products,#noperm-items,#noperm-vendors,#noperm-data{display:none}
+body.li:not(.can-products) #noperm-products,body.li:not(.can-items) #noperm-items,body.li:not(.can-vendors) #noperm-vendors,body.li:not(.can-data) #noperm-data{display:flex}
 h2{font-family:var(--disp);font-weight:900;font-size:18px;letter-spacing:-.3px;margin:26px 0 12px;display:flex;align-items:center;gap:10px}
 h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff;padding:2px 8px;font-weight:600}
 .muted{color:var(--ink2)} .mono{font-family:var(--mono)}
@@ -133,6 +134,40 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
 .hide{display:none!important}
 .foot{margin-top:30px;font-size:11px;color:var(--ink2);font-family:var(--mono);text-align:center;border-top:1px solid var(--line2);padding-top:14px}
 @media(max-width:640px){.imeta{margin-left:0;width:100%;padding-left:26px}.irow{flex-wrap:wrap}}
+/* 產品管理 */
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-top:8px}
+.pcard{background:var(--card);border:1.5px solid var(--line2);padding:13px 14px;cursor:pointer;transition:.12s;position:relative}
+.pcard:hover{border-color:var(--ink)}
+.pcard.off{opacity:.55}
+.pcard .pn{font-family:var(--disp);font-weight:700;font-size:15px}
+.pcard .pen{font-family:var(--mono);font-size:11px;color:var(--ink2)}
+.pcard .pmeta{display:flex;gap:8px;align-items:center;margin-top:9px;flex-wrap:wrap}
+.badge{font-family:var(--mono);font-size:10px;font-weight:600;padding:2px 7px;border:1px solid var(--line2);color:var(--ink2)}
+.badge.acc{background:var(--accent);color:#fff;border-color:var(--accent)}
+.badge.gn{background:#eef5ef;color:var(--green);border-color:var(--green)}
+.badge.off{color:var(--grey);border-color:var(--grey)}
+.acat{font-family:var(--disp);font-weight:700;font-size:14px;padding:7px 0 5px;border-bottom:2px solid var(--ink);margin-top:16px;display:flex;gap:8px;align-items:center}
+.acat .c{font-family:var(--mono);font-size:11px;color:var(--ink2)}
+/* 照片 */
+.phgrid{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.ph{position:relative;width:104px}
+.ph img{width:104px;height:104px;object-fit:cover;border:1.5px solid var(--line2);background:var(--paper2);display:block;cursor:zoom-in}
+.ph .cap{font-size:10px;color:var(--ink2);text-align:center;margin-top:2px;font-family:var(--mono)}
+.ph .del{position:absolute;top:2px;right:2px;background:rgba(29,26,21,.78);color:#fff;border:none;width:20px;height:20px;line-height:1;font-size:13px}
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:200;display:none;align-items:center;justify-content:center;padding:24px}
+.lightbox.on{display:flex} .lightbox img{max-width:92vw;max-height:92vh;object-fit:contain}
+/* 分析 / 樞紐 */
+.an-tab{background:transparent;border:1.5px solid var(--line2);padding:6px 11px;font-size:12px;font-weight:600;color:var(--ink2)}
+.an-tab.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.atable{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+.atable th{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink2);text-align:left;padding:6px 8px;border-bottom:1.5px solid var(--line2)}
+.atable td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.cov{height:8px;background:var(--paper2);border:1px solid var(--line2);min-width:90px;overflow:hidden}
+.cov i{display:block;height:100%;background:var(--green)}
+.chiplist{display:flex;flex-wrap:wrap;gap:4px}
+.minichip{font-size:11px;background:var(--paper2);border:1px solid var(--line);padding:1px 7px;cursor:pointer}
+.minichip:hover{border-color:var(--ink)}
+.linkish{color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 </style>
 </head>
 <body>
@@ -145,8 +180,10 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
     </div>
     <div class="tabs">
       <button class="tab on" data-tab="dash">總覽</button>
+      <button class="tab" data-tab="products">產品管理</button>
       <button class="tab" data-tab="items">需求 × 廠商對應</button>
       <button class="tab" data-tab="vendors">廠商</button>
+      <button class="tab" data-tab="analysis">分析中心</button>
       <button class="tab" data-tab="data">設定 / 備份</button>
       <button class="tab" data-tab="history">修改紀錄</button>
       <button class="tab hide" id="tab-accounts" data-tab="accounts">帳號</button>
@@ -165,8 +202,21 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
     <div id="groupprog"></div>
   </section>
 
+  <section id="products" class="hide">
+    <h2 style="margin-top:18px"><span class="n">產品</span>產品管理
+      <button class="btn acc sm wr-products" style="margin-left:auto" onclick="openProduct()">＋ 新增產品</button></h2>
+    <div id="noperm-products" class="note" style="border-color:var(--accent);color:var(--accent-d)">🔒 你沒有「產品管理」頁的編輯權限，目前為唯讀。需要編輯請聯絡管理員開放。</div>
+    <div class="note">產品為系統核心：產品 → 綁定包材 → 包材對應供應商。點產品卡片可看詳情並綁定包材。</div>
+    <div class="row" style="margin-top:10px;gap:10px">
+      <input id="prodSearch" placeholder="🔍 搜尋產品名稱…" style="border:1.5px solid var(--line2);padding:7px 10px;background:#fff;min-width:220px" oninput="renderProducts()">
+      <select id="prodCatFilter" style="border:1.5px solid var(--line2);padding:7px 10px;background:#fff" onchange="renderProducts()"></select>
+      <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" id="prodHideInactive" style="width:auto" onchange="renderProducts()"> 只看啟用中</label>
+    </div>
+    <div id="productlist" style="margin-top:12px"></div>
+  </section>
+
   <section id="items" class="hide">
-    <h2 style="margin-top:18px"><span class="n">需求</span>包材 / 耗材對應追蹤
+    <h2 style="margin-top:18px"><span class="n">包材</span>包材主檔 / 廠商對應
       <button class="btn acc sm wr-items" style="margin-left:auto" onclick="openItem()">＋ 新增品項</button></h2>
     <div id="noperm-items" class="note" style="border-color:var(--accent);color:var(--accent-d)">🔒 你沒有「需求對應」頁的編輯權限，目前為唯讀。需要編輯請聯絡管理員開放。</div>
     <div class="note">點品項展開 → 系統依「適配類型」建議廠商（標 <span class="sug">建議</span>）。逐家填詢價狀態 / 單價 / MOQ / 交期，按 ★ 標記選定廠商。所有欄位即時同步給協作者。</div>
@@ -178,6 +228,13 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
       <button class="btn acc sm wr-vendors" style="margin-left:auto" onclick="openVendor()">＋ 新增廠商</button></h2>
     <div id="noperm-vendors" class="note" style="border-color:var(--accent);color:var(--accent-d)">🔒 你沒有「廠商」頁的編輯權限，目前為唯讀。需要編輯請聯絡管理員開放。</div>
     <div id="vendorgrid" class="vgrid"></div>
+  </section>
+
+  <section id="analysis" class="hide">
+    <h2 style="margin-top:18px"><span class="n">分析</span>分析中心 · 樞紐分析</h2>
+    <div class="note">快速看出包材共用性與採購整合機會。切換下方分析模式。</div>
+    <div class="tabs" id="anModes" style="margin:14px 0 0;gap:6px"></div>
+    <div id="analysisbody" style="margin-top:14px"></div>
   </section>
 
   <section id="data" class="hide">
@@ -234,8 +291,9 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
   </div>
   <div class="row" style="gap:11px">
     <div class="fld" style="flex:1"><label>規格 / cm</label><input id="im_spec" placeholder="24*5.5 / 1000ml"></div>
-    <div class="fld" style="flex:1"><label>對應產品</label><input id="im_prod" placeholder="沙拉、碗"></div>
+    <div class="fld" style="flex:1"><label>材質</label><input id="im_material" placeholder="牛皮紙 / PP / 甘蔗渣植纖…"></div>
   </div>
+  <div class="fld"><label>對應產品（舊欄位，可留空；改用「產品管理」綁定）</label><input id="im_prod" placeholder="沙拉、碗"></div>
   <div class="fld"><label>備註</label><textarea id="im_note"></textarea></div>
   <div class="modacts">
     <button class="btn ghost" id="im_del" onclick="delItem()">刪除</button>
@@ -265,6 +323,38 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
   </div>
 </div></div>
 
+<!-- PRODUCT MODAL -->
+<div class="ov" id="productModal"><div class="modal">
+  <h3 id="pmTitle">新增產品</h3>
+  <div class="row" style="gap:11px">
+    <div class="fld" style="flex:1"><label>類別</label><select id="pm_cat"></select></div>
+    <div class="fld" style="flex:1"><label>售價</label><input id="pm_price" placeholder="120 / 依規格"></div>
+  </div>
+  <div class="row" style="gap:11px">
+    <div class="fld" style="flex:2"><label>品名</label><input id="pm_name" placeholder="例：冰美式"></div>
+    <div class="fld" style="flex:2"><label>英文名稱</label><input id="pm_en" placeholder="Iced Americano"></div>
+  </div>
+  <div class="fld"><label>備註</label><textarea id="pm_note"></textarea></div>
+  <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" id="pm_active" style="width:auto" checked> 啟用中（停用的產品不列入分析）</label>
+  <div class="modacts">
+    <button class="btn ghost" id="pm_del" onclick="delProduct()">刪除</button>
+    <button class="btn ghost" onclick="closeModal('productModal')">取消</button>
+    <button class="btn acc" onclick="saveProduct()">儲存</button>
+  </div>
+</div></div>
+
+<!-- PRODUCT DETAIL MODAL -->
+<div class="ov" id="prodDetailModal"><div class="modal" style="max-width:640px">
+  <div id="prodDetailBody"></div>
+  <div class="modacts"><button class="btn ghost" onclick="closeModal('prodDetailModal')">關閉</button></div>
+</div></div>
+
+<!-- PACKAGING DETAIL MODAL -->
+<div class="ov" id="packDetailModal"><div class="modal" style="max-width:680px">
+  <div id="packDetailBody"></div>
+  <div class="modacts"><button class="btn ghost" onclick="closeModal('packDetailModal')">關閉</button></div>
+</div></div>
+
 <!-- LOGIN MODAL -->
 <div class="ov" id="loginModal"><div class="modal" style="max-width:400px">
   <h3>登入</h3>
@@ -276,6 +366,9 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
     <button class="btn acc" onclick="doLogin()">登入</button>
   </div>
 </div></div>
+
+<!-- 照片放大 -->
+<div class="lightbox" id="lightbox" onclick="this.classList.remove('on')"><img id="lightboxImg" src="" alt=""></div>
 
 <script>
 /* ===================================================================
@@ -298,6 +391,8 @@ const CAT = {
 };
 const CATKEYS = Object.keys(CAT);
 const GROUPS = ['單品包材','包裝袋','醬料包','餐具','清潔','防護'];
+const PRODUCT_CATS = ['Pizza','早餐','越南三明治','速食','副餐','沙拉/飯碗','湯品','甜點','冰淇淋','飲品'];
+const PHOTO_BUCKET = 'packaging-photos';   // Supabase Storage 公開 bucket 名稱
 const STATUS = ['未詢價','詢價中','已報價','打樣中','已選定','已下單','不適用'];
 const STATUS_CLASS = {未詢價:'todo',不適用:'todo',詢價中:'prog',已報價:'prog',打樣中:'prog',已選定:'done',已下單:'done'};
 
@@ -382,8 +477,9 @@ const SEED_ITEMS = [
 ].map((r,i)=>({id:'i'+(i+1),group:r[0],name:r[1],type:r[2],spec:r[3],prod:r[4],note:r[5],sort:i}));
 
 /* ============ 狀態 ============ */
-let cloud=false, sb=null, DB={vendors:[],items:[],matches:{}};
+let cloud=false, sb=null, DB={vendors:[],items:[],matches:{},products:[],prodPack:{},images:{}};
 let openItems={}, editingItem=null, editingVendor=null, vmCats=[];
+let editingProduct=null, anMode='p2p', detailPackId=null;
 const KEY='ground_pack_v1';
 
 /* ============ 帳號 / 登入 ============ */
@@ -392,8 +488,8 @@ const USERKEY='ground_pack_user'; // 本機記住目前登入帳號
 let currentUser=null;             // {name,isAdmin} 或 null（未登入＝唯讀）
 let accounts=[];                  // 額外帳號（不含內建管理員）[{name,is_admin,sort}]
 
-const PAGES=['items','vendors','data'];
-const PAGE_LABEL={items:'需求對應',vendors:'廠商',data:'設定 / 備份'};
+const PAGES=['products','items','vendors','data'];
+const PAGE_LABEL={products:'產品管理',items:'包材對應',vendors:'廠商',data:'設定 / 備份'};
 function isValidAccount(n){ return n===SUPER_ADMIN || accounts.some(a=>a.name===n); }
 function accountIsAdmin(n){ return n===SUPER_ADMIN || !!(accounts.find(a=>a.name===n)||{}).is_admin; }
 function accountPerms(n){ if(accountIsAdmin(n)) return [...PAGES];   // 管理員＝全部頁面
@@ -493,9 +589,10 @@ async function loadLocal(){ let raw=null;
   try{ const r=await window.storage.get(KEY); if(r&&r.value) raw=r.value; }
   catch(e){ try{ raw=localStorage.getItem(KEY);}catch(_){} }
   if(raw){ try{ DB=JSON.parse(raw);}catch(e){ seedLocal(); } } else seedLocal();
-  if(!DB.vendors)DB.vendors=[]; if(!DB.items)DB.items=[]; if(!DB.matches)DB.matches={}; if(!DB.accounts)DB.accounts=[]; if(!DB.history)DB.history=[]; }
+  if(!DB.vendors)DB.vendors=[]; if(!DB.items)DB.items=[]; if(!DB.matches)DB.matches={}; if(!DB.accounts)DB.accounts=[]; if(!DB.history)DB.history=[];
+  if(!DB.products)DB.products=[]; if(!DB.prodPack)DB.prodPack={}; if(!DB.images)DB.images={}; }
 function seedLocal(){ DB={vendors:JSON.parse(JSON.stringify(SEED_VENDORS)),
-  items:JSON.parse(JSON.stringify(SEED_ITEMS)), matches:{}, accounts:[], history:[]}; }
+  items:JSON.parse(JSON.stringify(SEED_ITEMS)), matches:{}, accounts:[], history:[], products:[], prodPack:{}, images:{}}; }
 
 /* ============ 雲端層 ============ */
 async function cloudLoad(){
@@ -506,22 +603,52 @@ async function cloudLoad(){
   ]);
   if(vr.error||ir.error||mr.error) throw (vr.error||ir.error||mr.error);
   DB.vendors=(vr.data||[]).map(r=>({id:r.id,name:r.name,en:r.en,reg:r.reg,url:r.url,cats:r.cats||[],tags:r.tags||[],note:r.note,sort:r.sort}));
-  DB.items=(ir.data||[]).map(r=>({id:r.id,group:r.grp,name:r.name,type:r.type,spec:r.spec,prod:r.prod,note:r.note,sort:r.sort}));
+  DB.items=(ir.data||[]).map(r=>({id:r.id,group:r.grp,name:r.name,type:r.type,spec:r.spec,prod:r.prod,note:r.note,material:r.material||'',sort:r.sort}));
   DB.matches={};
   (mr.data||[]).forEach(r=>{ (DB.matches[r.item_id]=DB.matches[r.item_id]||[]).push(
     {vendorId:r.vendor_id,status:r.status,price:r.price,moq:r.moq,lead:r.lead,note:r.note,chosen:r.chosen,hidden:!!r.hidden}); });
+  // ↓ 新表：各自容錯，未建表時不影響其他資料
+  DB.products=[]; DB.prodPack={}; DB.images={};
+  try{ const pr=await sb.from('products').select('*').order('sort');
+    if(!pr.error) DB.products=(pr.data||[]).map(r=>({id:r.id,category:r.category,name:r.name,en:r.english_name,price:r.price,note:r.note,active:r.is_active!==false,sort:r.sort||0})); }catch(e){}
+  try{ const rr=await sb.from('product_packaging').select('*');
+    if(!rr.error)(rr.data||[]).forEach(r=>{ (DB.prodPack[r.product_id]=DB.prodPack[r.product_id]||[]).push(r.packaging_id); }); }catch(e){}
+  try{ const gr=await sb.from('packaging_images').select('*').order('sort_order');
+    if(!gr.error)(gr.data||[]).forEach(r=>{ (DB.images[r.packaging_id]=DB.images[r.packaging_id]||[]).push({id:r.id,url:r.image_url,label:r.label||'',sort:r.sort_order||0}); }); }catch(e){}
 }
 async function upVendor(v){ if(!cloud) return persist();
   await sb.from('vendors').upsert({id:v.id,name:v.name,en:v.en,reg:v.reg,url:v.url,cats:v.cats,tags:v.tags,note:v.note,sort:v.sort||0}); }
 async function delVendorCloud(id){ if(!cloud) return persist(); await sb.from('vendors').delete().eq('id',id); }
 async function upItem(it){ if(!cloud) return persist();
-  await sb.from('items').upsert({id:it.id,grp:it.group,name:it.name,type:it.type,spec:it.spec,prod:it.prod,note:it.note,sort:it.sort||0}); }
+  const row={id:it.id,grp:it.group,name:it.name,type:it.type,spec:it.spec,prod:it.prod,note:it.note,material:it.material||'',sort:it.sort||0};
+  const {error}=await sb.from('items').upsert(row);
+  if(error){ const r2={...row}; delete r2.material; await sb.from('items').upsert(r2); } }  // material 欄位未建時降級
 async function delItemCloud(id){ if(!cloud) return persist(); await sb.from('items').delete().eq('id',id); }
 async function upMatch(iid,m){ if(!cloud) return persist();
   const row={item_id:iid,vendor_id:m.vendorId,status:m.status,price:m.price,moq:m.moq,lead:m.lead,note:m.note,chosen:!!m.chosen,hidden:!!m.hidden};
   const {error}=await sb.from('matches').upsert(row);
   if(error){ const r2={...row}; delete r2.hidden; await sb.from('matches').upsert(r2); } }  // hidden 欄位未建時自動降級
 async function delMatchCloud(iid,vid){ if(!cloud) return persist(); await sb.from('matches').delete().eq('item_id',iid).eq('vendor_id',vid); }
+/* 產品 / 綁定 / 照片 雲端寫入 */
+async function upProduct(p){ if(!cloud) return persist();
+  await sb.from('products').upsert({id:p.id,category:p.category,name:p.name,english_name:p.en,price:p.price,note:p.note,is_active:p.active!==false,sort:p.sort||0}); }
+async function delProductCloud(id){ if(!cloud) return persist();
+  await sb.from('product_packaging').delete().eq('product_id',id);
+  await sb.from('products').delete().eq('id',id); }
+async function bindPack(pid,packId){ if(!cloud) return persist(); await sb.from('product_packaging').upsert({product_id:pid,packaging_id:packId}); }
+async function unbindPack(pid,packId){ if(!cloud) return persist(); await sb.from('product_packaging').delete().eq('product_id',pid).eq('packaging_id',packId); }
+async function addImageRow(packId,url,label){ if(!cloud) return persist();
+  const sort=(DB.images[packId]||[]).length;
+  const {data}=await sb.from('packaging_images').insert({packaging_id:packId,image_url:url,label:label||'',sort_order:sort}).select();
+  return (data&&data[0])?data[0].id:null; }
+async function delImageRow(imgId){ if(!cloud) return persist(); await sb.from('packaging_images').delete().eq('id',imgId); }
+async function uploadPhoto(file,packId){
+  if(!cloud) throw new Error('本機模式不支援上傳，請先設定雲端。');
+  const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
+  const path=packId+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.'+ext;
+  const up=await sb.storage.from(PHOTO_BUCKET).upload(path,file,{cacheControl:'3600',upsert:false});
+  if(up.error) throw up.error;
+  return sb.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl; }
 
 async function seedCloud(){ if(!requireWrite('data'))return;
   if(!cloud){ seedLocal(); await persist(); renderAll(); alert('（本機模式）已載入預設資料'); return; }
@@ -539,6 +666,9 @@ async function pushAllToCloud(){
     if(error) await sb.from('matches').upsert(rows.map(r=>{const x={...r};delete x.hidden;return x;})); }
 }
 async function wipeCloud(){
+  try{ await sb.from('packaging_images').delete().neq('packaging_id',''); }catch(e){}
+  try{ await sb.from('product_packaging').delete().neq('product_id',''); }catch(e){}
+  try{ await sb.from('products').delete().neq('id',''); }catch(e){}
   await sb.from('matches').delete().neq('item_id','');
   await sb.from('items').delete().neq('id','');
   await sb.from('vendors').delete().neq('id','');
@@ -552,6 +682,9 @@ function subscribe(){ if(!cloud) return;
     .on('postgres_changes',{event:'*',schema:'public',table:'items'},refetchSoon)
     .on('postgres_changes',{event:'*',schema:'public',table:'matches'},refetchSoon)
     .on('postgres_changes',{event:'*',schema:'public',table:'accounts'},refetchSoon)
+    .on('postgres_changes',{event:'*',schema:'public',table:'products'},refetchSoon)
+    .on('postgres_changes',{event:'*',schema:'public',table:'product_packaging'},refetchSoon)
+    .on('postgres_changes',{event:'*',schema:'public',table:'packaging_images'},refetchSoon)
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'history'},()=>{
       if(!document.getElementById('history').classList.contains('hide')) renderHistory(); })
     .subscribe();
@@ -626,14 +759,17 @@ function itemHTML(it){
       ${it.spec?`<span class="ispec">${esc(it.spec)}</span>`:''}
       <span class="itype">${CAT[it.type]||it.type}</span>
       <span class="imeta">
+        ${(DB.images[it.id]||[]).length?`<span class="badge">📷 ${(DB.images[it.id]||[]).length}</span>`:''}
         ${chV?`<span class="chosen-tag">★ ${esc(chV.en||chV.name)}${chosen.price?' · $'+esc(chosen.price):''}</span>`:''}
         <span class="pill ${STATUS_CLASS[st]}">${st}</span>
+        <button class="btn ghost sm" onclick="event.stopPropagation();packDetail('${it.id}')">詳情</button>
         <button class="btn ghost sm wr-items" onclick="event.stopPropagation();openItem('${it.id}')">編輯</button>
       </span>
     </div>
     <div class="idet">
-      ${(it.prod||it.note)?`<div class="muted" style="margin-top:10px;font-size:12px">
-        ${it.prod?'對應產品：'+esc(it.prod):''} ${it.note?' ｜ 備註：'+esc(it.note):''}</div>`:''}
+      <div class="muted" style="margin-top:10px;font-size:12px">
+        ${it.material?'材質：'+esc(it.material):''}${it.material&&(it.prod||it.note)?' ｜ ':''}${it.prod?'對應產品：'+esc(it.prod):''}${it.note?' ｜ 備註：'+esc(it.note):''}
+        ${productsUsing(it.id).length?' ｜ 被 '+productsUsing(it.id).length+' 項產品使用':''}</div>
       <div class="sec"><div class="seclab">廠商詢價對應</div>${quoteTable(it)}</div>
     </div></div>`;
 }
@@ -727,13 +863,13 @@ function openItem(id){ if(!requireWrite('items'))return; editingItem=id||null;
   document.getElementById('imTitle').textContent=id?'編輯品項':'新增品項';
   if(id){ const it=DB.items.find(i=>i.id===id);
     im_name.value=it.name; gSel.value=it.group; tSel.value=it.type;
-    im_spec.value=it.spec||''; im_prod.value=it.prod||''; im_note.value=it.note||''; }
-  else { im_name.value='';im_spec.value='';im_prod.value='';im_note.value=''; gSel.value=GROUPS[0]; tSel.value='box'; }
+    im_spec.value=it.spec||''; im_prod.value=it.prod||''; im_note.value=it.note||''; im_material.value=it.material||''; }
+  else { im_name.value='';im_spec.value='';im_prod.value='';im_note.value='';im_material.value=''; gSel.value=GROUPS[0]; tSel.value='box'; }
   document.getElementById('itemModal').classList.add('on');
 }
 async function saveItem(){ if(!requireWrite('items'))return;
   const o={name:im_name.value.trim(),group:im_group.value,type:im_type.value,
-    spec:im_spec.value.trim(),prod:im_prod.value.trim(),note:im_note.value.trim()};
+    spec:im_spec.value.trim(),prod:im_prod.value.trim(),note:im_note.value.trim(),material:im_material.value.trim()};
   if(!o.name){ alert('請輸入品項名稱'); return; }
   let target;
   const isNew=!editingItem;
@@ -744,9 +880,203 @@ async function saveItem(){ if(!requireWrite('items'))return;
 }
 async function delItem(){ if(!requireWrite('items'))return; if(!editingItem||!confirm('確定刪除此品項？')) return;
   const id=editingItem; const it=DB.items.find(i=>i.id===id); const nm=it?it.name:id;
-  DB.items=DB.items.filter(i=>i.id!==id); delete DB.matches[id];
-  await delItemCloud(id); closeModal('itemModal'); renderItems(); renderDash();
-  logHist('刪除品項', nm, ''); }
+  DB.items=DB.items.filter(i=>i.id!==id); delete DB.matches[id]; delete DB.images[id];
+  Object.keys(DB.prodPack).forEach(pid=>{ DB.prodPack[pid]=(DB.prodPack[pid]||[]).filter(x=>x!==id); });
+  await delItemCloud(id); closeModal('itemModal'); renderItems(); renderDash(); renderProducts();
+  logHist('刪除品項', nm, '（含其綁定與照片）'); }
+
+/* ============ 產品 / 包材關聯 / 照片 / 分析 ============ */
+function packName(id){ const it=DB.items.find(i=>i.id===id); return it?it.name:'(已刪除)'; }
+function packagingOf(pid){ return (DB.prodPack[pid]||[]).map(id=>DB.items.find(i=>i.id===id)).filter(Boolean); }
+function productsUsing(packId){ return DB.products.filter(p=>(DB.prodPack[p.id]||[]).includes(packId)); }
+function vendorsForPack(it){ if(!it) return [];
+  const ms=(DB.matches[it.id]||[]).filter(m=>!m.hidden).map(m=>m.vendorId);
+  const ids=[...new Set([...ms, ...suggestedVendors(it).map(v=>v.id)])];
+  return ids.map(id=>DB.vendors.find(v=>v.id===id)).filter(Boolean); }
+
+function renderProdCatFilter(){ const sel=document.getElementById('prodCatFilter'); if(!sel) return;
+  const cur=sel.value||'';
+  const cats=[...new Set(PRODUCT_CATS.concat(DB.products.map(p=>p.category).filter(Boolean)))];
+  sel.innerHTML='<option value="">全部類別</option>'+cats.map(c=>`<option ${cur===c?'selected':''}>${esc(c)}</option>`).join(''); }
+function renderProducts(){
+  const el=document.getElementById('productlist'); if(!el) return;
+  renderProdCatFilter();
+  const q=((document.getElementById('prodSearch')||{}).value||'').trim().toLowerCase();
+  const catf=(document.getElementById('prodCatFilter')||{}).value||'';
+  const onlyActive=(document.getElementById('prodHideInactive')||{}).checked;
+  if(!DB.products.length){ el.innerHTML='<div class="note">還沒有產品。點右上「＋ 新增產品」開始（若雲端尚未建 products 等資料表，請先到「設定 / 備份」看建表 SQL）。</div>'; return; }
+  let list=DB.products.filter(p=>{
+    if(catf && (p.category||'未分類')!==catf) return false;
+    if(onlyActive && p.active===false) return false;
+    if(q && !((p.name||'').toLowerCase().includes(q)||(p.en||'').toLowerCase().includes(q))) return false;
+    return true; });
+  if(!list.length){ el.innerHTML='<div class="note">沒有符合條件的產品。</div>'; return; }
+  const cats=[...new Set(PRODUCT_CATS.concat(list.map(p=>p.category||'未分類')))];
+  let h='';
+  cats.forEach(c=>{ const ps=list.filter(p=>(p.category||'未分類')===c); if(!ps.length) return;
+    h+=`<div class="acat">${esc(c)} <span class="c">${ps.length} 項</span></div><div class="pgrid">`;
+    ps.forEach(p=>{ const cnt=(DB.prodPack[p.id]||[]).filter(id=>DB.items.find(i=>i.id===id)).length;
+      h+=`<div class="pcard ${p.active===false?'off':''}" onclick="productDetail('${p.id}')">
+        <div class="pn">${esc(p.name)}</div>${p.en?`<div class="pen">${esc(p.en)}</div>`:''}
+        <div class="pmeta">${p.active===false?'<span class="badge off">停用</span>':'<span class="badge gn">啟用</span>'}
+          ${p.price?`<span class="badge">$${esc(p.price)}</span>`:''}<span class="badge acc">包材 ${cnt}</span></div></div>`; });
+    h+='</div>'; });
+  el.innerHTML=h;
+}
+function openProduct(id){ if(!requireWrite('products'))return; editingProduct=id||null;
+  const sel=document.getElementById('pm_cat');
+  const cats=[...new Set(PRODUCT_CATS.concat(DB.products.map(p=>p.category).filter(Boolean)))];
+  sel.innerHTML=cats.map(c=>`<option>${esc(c)}</option>`).join('');
+  document.getElementById('pm_del').classList.toggle('hide',!id);
+  document.getElementById('pmTitle').textContent=id?'編輯產品':'新增產品';
+  if(id){ const p=DB.products.find(x=>x.id===id);
+    sel.value=p.category||PRODUCT_CATS[0]; pm_name.value=p.name||''; pm_en.value=p.en||'';
+    pm_price.value=p.price||''; pm_note.value=p.note||''; pm_active.checked=p.active!==false; }
+  else { sel.value=PRODUCT_CATS[0]; pm_name.value='';pm_en.value='';pm_price.value='';pm_note.value=''; pm_active.checked=true; }
+  document.getElementById('productModal').classList.add('on');
+}
+async function saveProduct(){ if(!requireWrite('products'))return;
+  const o={category:pm_cat.value, name:pm_name.value.trim(), en:pm_en.value.trim(),
+    price:pm_price.value.trim(), note:pm_note.value.trim(), active:pm_active.checked};
+  if(!o.name){ alert('請輸入品名'); return; }
+  const isNew=!editingProduct; let target;
+  if(editingProduct){ target=DB.products.find(p=>p.id===editingProduct); Object.assign(target,o); }
+  else { o.id='p'+Date.now(); o.sort=(DB.products.reduce((m,x)=>Math.max(m,x.sort||0),0))+1; DB.products.push(o); target=o; }
+  await upProduct(target); closeModal('productModal'); renderProducts();
+  if(document.getElementById('prodDetailModal').classList.contains('on')) productDetail(target.id);
+  logHist(isNew?'新增產品':'修改產品', o.name, o.category+(o.active?'':' · 停用'));
+}
+async function delProduct(){ if(!requireWrite('products'))return; if(!editingProduct||!confirm('確定刪除此產品？')) return;
+  const id=editingProduct; const p=DB.products.find(x=>x.id===id); const nm=p?p.name:id;
+  DB.products=DB.products.filter(x=>x.id!==id); delete DB.prodPack[id];
+  await delProductCloud(id); closeModal('productModal'); closeModal('prodDetailModal'); renderProducts();
+  logHist('刪除產品', nm, ''); }
+
+function productDetail(id){ const p=DB.products.find(x=>x.id===id); if(!p) return;
+  const packs=packagingOf(id); const canP=canEdit('products');
+  let h=`<h3 style="font-family:var(--disp);font-weight:900;font-size:20px">${esc(p.name)} ${p.en?`<span class="pen">${esc(p.en)}</span>`:''}</h3>
+    <div class="pmeta" style="margin-top:6px"><span class="badge">${esc(p.category||'未分類')}</span>
+      ${p.price?`<span class="badge">$${esc(p.price)}</span>`:''}
+      ${p.active===false?'<span class="badge off">停用</span>':'<span class="badge gn">啟用</span>'}
+      ${canP?`<button class="btn ghost sm" style="margin-left:auto" onclick="openProduct('${id}')">編輯產品</button>`:''}</div>
+    ${p.note?`<div class="note">${esc(p.note)}</div>`:''}
+    <div class="seclab" style="margin-top:14px;font-family:var(--mono);font-size:11px;text-transform:uppercase;color:var(--ink2)">已綁定包材（${packs.length}）</div>`;
+  if(packs.length){ h+='<table class="atable"><thead><tr><th>包材</th><th>規格</th><th>對應供應商</th>'+(canP?'<th></th>':'')+'</tr></thead><tbody>';
+    packs.forEach(it=>{ h+=`<tr><td><span class="linkish" onclick="packDetail('${it.id}')">${esc(it.name)}</span></td>
+      <td class="mono" style="font-size:12px">${esc(it.spec||'')}</td><td>${vendorsForPack(it).length}</td>
+      ${canP?`<td><button class="x" title="移除綁定" onclick="unbindFromProduct('${id}','${it.id}')">×</button></td>`:''}</tr>`; });
+    h+='</tbody></table>'; }
+  else h+='<div class="note">尚未綁定任何包材。'+(canP?'用下方選單加入。':'')+'</div>';
+  if(canP){ const used=new Set(DB.prodPack[id]||[]); const opts=DB.items.filter(it=>!used.has(it.id));
+    h+=`<div class="addv" style="margin-top:10px"><select onchange="if(this.value){bindToProduct('${id}',this.value);this.value=''}">
+      <option value="">＋ 綁定包材…</option>${opts.map(it=>`<option value="${it.id}">${esc(it.name)}${it.spec?' — '+esc(it.spec):''}</option>`).join('')}</select></div>`; }
+  document.getElementById('prodDetailBody').innerHTML=h;
+  document.getElementById('prodDetailModal').classList.add('on');
+}
+async function bindToProduct(pid,packId){ if(!requireWrite('products'))return;
+  DB.prodPack[pid]=DB.prodPack[pid]||[]; if(!DB.prodPack[pid].includes(packId)) DB.prodPack[pid].push(packId);
+  await bindPack(pid,packId); productDetail(pid); renderProducts();
+  logHist('綁定包材', (DB.products.find(p=>p.id===pid)||{}).name||pid, packName(packId)); }
+async function unbindFromProduct(pid,packId){ if(!requireWrite('products'))return;
+  DB.prodPack[pid]=(DB.prodPack[pid]||[]).filter(x=>x!==packId);
+  await unbindPack(pid,packId); productDetail(pid); renderProducts();
+  logHist('移除綁定', (DB.products.find(p=>p.id===pid)||{}).name||pid, packName(packId)); }
+
+function packDetail(id){ const it=DB.items.find(i=>i.id===id); if(!it) return; detailPackId=id;
+  const imgs=DB.images[id]||[]; const prods=productsUsing(id); const vs=vendorsForPack(it); const canI=canEdit('items');
+  let h=`<h3 style="font-family:var(--disp);font-weight:900;font-size:20px">${esc(it.name)}</h3>
+    <div class="pmeta" style="margin-top:6px"><span class="badge acc">${CAT[it.type]||it.type}</span>
+      ${it.spec?`<span class="badge">規格 ${esc(it.spec)}</span>`:''}${it.material?`<span class="badge">材質 ${esc(it.material)}</span>`:''}
+      ${canI?`<button class="btn ghost sm" style="margin-left:auto" onclick="openItem('${id}')">編輯包材</button>`:''}</div>
+    ${it.note?`<div class="note">${esc(it.note)}</div>`:''}
+    <div class="seclab" style="margin-top:14px;font-family:var(--mono);font-size:11px;text-transform:uppercase;color:var(--ink2)">照片（${imgs.length}）</div>
+    <div class="phgrid">`;
+  imgs.forEach(im=>{ const idArg=(im.id==null)?'null':`'${esc(String(im.id))}'`;
+    h+=`<div class="ph"><img src="${esc(im.url)}" onclick="lightbox('${esc(im.url)}')" alt="">
+      ${canI?`<button class="del" title="刪除" onclick="delPhoto('${id}',${idArg})">×</button>`:''}
+      ${im.label?`<div class="cap">${esc(im.label)}</div>`:''}</div>`; });
+  h+='</div>';
+  if(canI){ h+=`<div class="row" style="margin-top:10px;gap:8px;align-items:center">
+    <input id="ph_label" placeholder="標註：正面 / 側面 / 尺寸圖 / 刀模圖 / 實拍圖…" style="border:1.5px solid var(--line2);padding:6px 9px;background:#fff;flex:1">
+    <button class="btn sm" onclick="document.getElementById('ph_file').click()">＋ 上傳照片</button>
+    <input type="file" id="ph_file" accept="image/*" class="hide" onchange="onPhotoPick(event,'${id}')">
+    <span id="ph_status" class="muted mono" style="font-size:11px"></span></div>`; }
+  h+=`<div class="seclab" style="margin-top:14px;font-family:var(--mono);font-size:11px;text-transform:uppercase;color:var(--ink2)">被哪些產品使用（${prods.length}）</div>`;
+  h+=prods.length?`<div class="chiplist">${prods.map(p=>`<span class="minichip" onclick="productDetail('${p.id}')">${esc(p.name)}</span>`).join('')}</div>`:'<div class="muted" style="font-size:12px">尚無產品使用此包材。</div>';
+  h+=`<div class="seclab" style="margin-top:14px;font-family:var(--mono);font-size:11px;text-transform:uppercase;color:var(--ink2)">對應供應商（${vs.length}）</div>`;
+  h+=vs.length?`<div class="chiplist">${vs.map(v=>`<span class="minichip">${esc(v.en||v.name)}</span>`).join('')}</div>`:'<div class="muted" style="font-size:12px">尚無對應供應商（去「需求 × 廠商對應」設定）。</div>';
+  document.getElementById('packDetailBody').innerHTML=h;
+  document.getElementById('packDetailModal').classList.add('on');
+}
+function fileToDataURL(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); }); }
+async function onPhotoPick(e,packId){ if(!requireWrite('items')){ e.target.value=''; return; }
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  if(f.size>10*1024*1024){ alert('圖片過大（>10MB），請壓縮後再上傳。'); return; }
+  const label=((document.getElementById('ph_label')||{}).value||'').trim();
+  const st=document.getElementById('ph_status'); if(st) st.textContent='上傳中…';
+  try{
+    const url=cloud?await uploadPhoto(f,packId):await fileToDataURL(f);
+    const newId=cloud?await addImageRow(packId,url,label):('img'+Date.now());
+    (DB.images[packId]=DB.images[packId]||[]).push({id:newId,url,label,sort:(DB.images[packId]||[]).length});
+    if(!cloud) await persist();
+    if(st) st.textContent=''; packDetail(packId); renderItems();
+    logHist('上傳照片', packName(packId), label||'');
+  }catch(err){ if(st) st.textContent='';
+    alert('上傳失敗：'+((err&&err.message)?err.message:err)+'\n\n請確認已在 Supabase 建立「公開」bucket：'+PHOTO_BUCKET+'，並開放 anon 上傳（見說明檔）。'); }
+}
+async function delPhoto(packId,imgId){ if(!requireWrite('items'))return; if(!confirm('刪除這張照片？')) return;
+  DB.images[packId]=(DB.images[packId]||[]).filter(im=>String(im.id)!==String(imgId));
+  if(cloud){ if(imgId!=null) await delImageRow(imgId); } else await persist();
+  packDetail(packId); renderItems(); logHist('刪除照片', packName(packId), ''); }
+function lightbox(url){ document.getElementById('lightboxImg').src=url; document.getElementById('lightbox').classList.add('on'); }
+
+const AN_MODES=[['p2p','產品 → 包材'],['k2p','包材 → 產品'],['share','包材共用率'],['coverage','供應商覆蓋率'],['gaps','缺漏分析']];
+function renderAnModes(){ const el=document.getElementById('anModes'); if(!el) return;
+  el.innerHTML=AN_MODES.map(([k,l])=>`<button class="an-tab ${anMode===k?'on':''}" onclick="setAnMode('${k}')">${l}</button>`).join(''); }
+function setAnMode(m){ anMode=m; renderAnalysis(); }
+function renderAnalysis(){ renderAnModes(); const el=document.getElementById('analysisbody'); if(!el) return;
+  const prods=DB.products.filter(p=>p.active!==false);
+  if(anMode==='p2p'){
+    if(!prods.length){ el.innerHTML='<div class="note">尚無啟用中的產品。</div>'; return; }
+    let h='<table class="atable"><thead><tr><th>產品</th><th>使用包材</th></tr></thead><tbody>';
+    prods.forEach(p=>{ const packs=packagingOf(p.id);
+      h+=`<tr><td class="vn"><span class="linkish" onclick="productDetail('${p.id}')">${esc(p.name)}</span><br><span class="muted mono" style="font-size:10px">${esc(p.category||'')}</span></td>
+        <td>${packs.length?`<div class="chiplist">${packs.map(it=>`<span class="minichip" onclick="packDetail('${it.id}')">${esc(it.name)}</span>`).join('')}</div>`:'<span class="muted" style="font-size:12px">未綁定</span>'}</td></tr>`; });
+    el.innerHTML=h+'</tbody></table>'; return; }
+  if(anMode==='k2p'){
+    let h='<table class="atable"><thead><tr><th>包材</th><th>使用產品</th><th>數量</th></tr></thead><tbody>';
+    DB.items.forEach(it=>{ const ps=productsUsing(it.id).filter(p=>p.active!==false);
+      h+=`<tr><td class="vn"><span class="linkish" onclick="packDetail('${it.id}')">${esc(it.name)}</span></td>
+        <td>${ps.length?`<div class="chiplist">${ps.map(p=>`<span class="minichip" onclick="productDetail('${p.id}')">${esc(p.name)}</span>`).join('')}</div>`:'<span class="muted" style="font-size:12px">未被使用</span>'}</td>
+        <td class="mono">${ps.length}</td></tr>`; });
+    el.innerHTML=(DB.items.length?'':'<div class="note">尚無包材。</div>')+h+'</tbody></table>'; return; }
+  if(anMode==='share'){
+    const rows=DB.items.map(it=>({it,n:productsUsing(it.id).filter(p=>p.active!==false).length})).sort((a,b)=>b.n-a.n);
+    const max=rows.length?Math.max(1,rows[0].n):1;
+    let h='<div class="note">依共用產品數排序：數字越大＝越多產品共用，採購整合（集中下單）效益越高。</div><table class="atable"><thead><tr><th>包材</th><th>類型</th><th>共用產品數</th><th></th></tr></thead><tbody>';
+    rows.forEach(({it,n})=>{ h+=`<tr><td class="vn"><span class="linkish" onclick="packDetail('${it.id}')">${esc(it.name)}</span></td>
+      <td style="font-size:12px">${CAT[it.type]||it.type}</td><td class="mono">${n}</td>
+      <td style="min-width:140px"><div class="cov"><i style="width:${Math.round(n/max*100)}%"></i></div></td></tr>`; });
+    el.innerHTML=h+'</tbody></table>'; return; }
+  if(anMode==='coverage'){
+    const totalPack=DB.items.length||1;
+    const rows=DB.vendors.map(v=>({v,covered:DB.items.filter(it=>(v.cats||[]).includes(it.type))})).sort((a,b)=>b.covered.length-a.covered.length);
+    let h='<div class="note">覆蓋率＝該供應商可供應的包材數 ÷ 全部包材數（依「供應類別」比對品項類型）。越高＝越能一站式供應。</div><table class="atable"><thead><tr><th>供應商</th><th>可供應包材</th><th>覆蓋率</th></tr></thead><tbody>';
+    rows.forEach(({v,covered})=>{ const pct=Math.round(covered.length/totalPack*100);
+      h+=`<tr><td class="vn">${esc(v.en||v.name)}<br><span class="muted" style="font-size:10px">${esc(v.name)}</span></td>
+        <td>${covered.length?`<div class="chiplist">${covered.slice(0,12).map(it=>`<span class="minichip" onclick="packDetail('${it.id}')">${esc(it.name)}</span>`).join('')}${covered.length>12?` <span class="muted" style="font-size:11px">+${covered.length-12}</span>`:''}</div>`:'<span class="muted" style="font-size:12px">—</span>'}</td>
+        <td style="min-width:160px"><div class="row" style="gap:8px;flex-wrap:nowrap"><span class="mono">${pct}%</span><div class="cov" style="flex:1"><i style="width:${pct}%"></i></div></div><span class="muted" style="font-size:11px">${covered.length}/${totalPack}</span></td></tr>`; });
+    el.innerHTML=h+'</tbody></table>'; return; }
+  if(anMode==='gaps'){
+    const noPackProds=DB.products.filter(p=>!(DB.prodPack[p.id]||[]).some(id=>DB.items.find(i=>i.id===id)));
+    const noVendPacks=DB.items.filter(it=>vendorsForPack(it).length===0);
+    const noPhotoPacks=DB.items.filter(it=>!(DB.images[it.id]||[]).length);
+    const block=(title,arr,render)=>`<div class="acat">${title} <span class="c">${arr.length}</span></div>`+(arr.length?`<div class="chiplist" style="margin-top:8px">${arr.map(render).join('')}</div>`:'<div class="muted" style="font-size:12px;margin-top:6px">無 ✅</div>');
+    el.innerHTML=block('尚未綁定包材的產品', noPackProds, p=>`<span class="minichip" onclick="productDetail('${p.id}')">${esc(p.name)}</span>`)
+      +block('尚未對應供應商的包材', noVendPacks, it=>`<span class="minichip" onclick="packDetail('${it.id}')">${esc(it.name)}</span>`)
+      +block('尚未上傳照片的包材', noPhotoPacks, it=>`<span class="minichip" onclick="packDetail('${it.id}')">${esc(it.name)}</span>`);
+    return; }
+}
 
 function openVendor(id){ if(!requireWrite('vendors'))return; editingVendor=id||null;
   const v=id?DB.vendors.find(x=>x.id===id):null; vmCats=v?[...(v.cats||[])]:[];
@@ -782,11 +1112,13 @@ function closeModal(id){ document.getElementById(id).classList.remove('on'); }
 /* ===== Tabs ===== */
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on')); t.classList.add('on');
-  ['dash','items','vendors','data','history','accounts'].forEach(s=>document.getElementById(s).classList.add('hide'));
+  ['dash','products','items','vendors','analysis','data','history','accounts'].forEach(s=>document.getElementById(s).classList.add('hide'));
   document.getElementById(t.dataset.tab).classList.remove('hide');
   if(t.dataset.tab==='dash') renderDash();
+  if(t.dataset.tab==='products') renderProducts();
   if(t.dataset.tab==='items') renderItems();
   if(t.dataset.tab==='vendors') renderVendors();
+  if(t.dataset.tab==='analysis') renderAnalysis();
   if(t.dataset.tab==='history') renderHistory();
   if(t.dataset.tab==='accounts') renderAccounts();
 });
@@ -903,7 +1235,7 @@ async function clearHistory(){ if(!requireAdmin()) return;
   else { DB.history=[]; await persist(); }
   renderHistory();
 }
-function renderAll(){ renderAuth(); renderWarn(); renderCloudStatus(); renderDash(); renderItems(); renderVendors(); renderLegend(); }
+function renderAll(){ renderAuth(); renderWarn(); renderCloudStatus(); renderDash(); renderProducts(); renderItems(); renderVendors(); renderAnalysis(); renderLegend(); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 /* ===== 啟動 ===== */
