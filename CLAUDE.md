@@ -56,6 +56,7 @@ const PASSCODE = '';               // 留空=不設密碼門禁；填字串=開�
 - **matches**：主鍵 `(item_id, vendor_id)`，`{status, price, moq, lead, note, chosen}`
   - 前端 `DB.matches` 以 itemId 為 key → match 陣列。
   - 每個「品項 × 廠商」是一列；`chosen=true` 表示該品項選定的廠商（一品項僅一個 chosen）。
+  - `hidden=true`：把某個「建議廠商」對該品項隱藏（建議是依 type 動態產生的，刪除無效會重生，故改用隱藏旗標）。`upMatch`／`pushAllToCloud` 對缺少 `hidden` 欄位的舊資料庫會自動降級（去掉該欄重送），不會中斷編輯。
 
 ### Supabase schema（重建用）
 
@@ -67,6 +68,7 @@ create table items(id text primary key, grp text, name text, type text, spec tex
 create table matches(item_id text references items(id) on delete cascade,
   vendor_id text references vendors(id) on delete cascade,
   status text, price text, moq text, lead text, note text, chosen boolean default false,
+  hidden boolean default false,
   primary key(item_id, vendor_id));
 create table accounts(name text primary key, is_admin boolean default false, sort int default 0);
 -- RLS 全關（公開讀寫設計）；realtime 已對四表開啟（vendors/items/matches/accounts）。

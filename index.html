@@ -468,7 +468,7 @@ async function cloudLoad(){
   DB.items=(ir.data||[]).map(r=>({id:r.id,group:r.grp,name:r.name,type:r.type,spec:r.spec,prod:r.prod,note:r.note,sort:r.sort}));
   DB.matches={};
   (mr.data||[]).forEach(r=>{ (DB.matches[r.item_id]=DB.matches[r.item_id]||[]).push(
-    {vendorId:r.vendor_id,status:r.status,price:r.price,moq:r.moq,lead:r.lead,note:r.note,chosen:r.chosen}); });
+    {vendorId:r.vendor_id,status:r.status,price:r.price,moq:r.moq,lead:r.lead,note:r.note,chosen:r.chosen,hidden:!!r.hidden}); });
 }
 async function upVendor(v){ if(!cloud) return persist();
   await sb.from('vendors').upsert({id:v.id,name:v.name,en:v.en,reg:v.reg,url:v.url,cats:v.cats,tags:v.tags,note:v.note,sort:v.sort||0}); }
@@ -477,7 +477,9 @@ async function upItem(it){ if(!cloud) return persist();
   await sb.from('items').upsert({id:it.id,grp:it.group,name:it.name,type:it.type,spec:it.spec,prod:it.prod,note:it.note,sort:it.sort||0}); }
 async function delItemCloud(id){ if(!cloud) return persist(); await sb.from('items').delete().eq('id',id); }
 async function upMatch(iid,m){ if(!cloud) return persist();
-  await sb.from('matches').upsert({item_id:iid,vendor_id:m.vendorId,status:m.status,price:m.price,moq:m.moq,lead:m.lead,note:m.note,chosen:!!m.chosen}); }
+  const row={item_id:iid,vendor_id:m.vendorId,status:m.status,price:m.price,moq:m.moq,lead:m.lead,note:m.note,chosen:!!m.chosen,hidden:!!m.hidden};
+  const {error}=await sb.from('matches').upsert(row);
+  if(error){ const r2={...row}; delete r2.hidden; await sb.from('matches').upsert(r2); } }  // hidden 欄位未建時自動降級
 async function delMatchCloud(iid,vid){ if(!cloud) return persist(); await sb.from('matches').delete().eq('item_id',iid).eq('vendor_id',vid); }
 
 async function seedCloud(){ if(!requireWrite())return;
@@ -491,8 +493,9 @@ async function pushAllToCloud(){
   await sb.from('vendors').upsert(DB.vendors.map((v,i)=>({id:v.id,name:v.name,en:v.en,reg:v.reg,url:v.url,cats:v.cats||[],tags:v.tags||[],note:v.note,sort:v.sort??i})));
   await sb.from('items').upsert(DB.items.map((it,i)=>({id:it.id,grp:it.group,name:it.name,type:it.type,spec:it.spec,prod:it.prod,note:it.note,sort:it.sort??i})));
   const rows=[]; Object.keys(DB.matches).forEach(iid=>(DB.matches[iid]||[]).forEach(m=>
-    rows.push({item_id:iid,vendor_id:m.vendorId,status:m.status,price:m.price,moq:m.moq,lead:m.lead,note:m.note,chosen:!!m.chosen})));
-  if(rows.length) await sb.from('matches').upsert(rows);
+    rows.push({item_id:iid,vendor_id:m.vendorId,status:m.status,price:m.price,moq:m.moq,lead:m.lead,note:m.note,chosen:!!m.chosen,hidden:!!m.hidden})));
+  if(rows.length){ const {error}=await sb.from('matches').upsert(rows);
+    if(error) await sb.from('matches').upsert(rows.map(r=>{const x={...r};delete x.hidden;return x;})); }
 }
 async function wipeCloud(){
   await sb.from('matches').delete().neq('item_id','');
@@ -515,7 +518,7 @@ async function manualRefresh(){ if(cloud){ try{ await cloudLoad(); renderAll(); 
 /* ============ 對應/建議 ============ */
 function suggestedVendors(item){ return DB.vendors.filter(v=>(v.cats||[]).includes(item.type)); }
 function matchesFor(id){ return DB.matches[id]||[]; }
-function itemStatus(item){ const ms=matchesFor(item.id);
+function itemStatus(item){ const ms=matchesFor(item.id).filter(m=>!m.hidden);
   if(ms.some(m=>m.chosen)) return '已選定';
   if(ms.some(m=>m.status==='已下單')) return '已下單';
   if(ms.some(m=>['詢價中','已報價','打樣中'].includes(m.status))) return '詢價中';
@@ -582,8 +585,10 @@ function itemHTML(it){
 }
 function quoteTable(it){
   const ms=matchesFor(it.id);
-  const sug=suggestedVendors(it).map(v=>v.id);
-  const rows=[...ms]; const present=new Set(ms.map(m=>m.vendorId));
+  const hidden=new Set(ms.filter(m=>m.hidden).map(m=>m.vendorId));
+  const visible=ms.filter(m=>!m.hidden);
+  const sug=suggestedVendors(it).map(v=>v.id).filter(vid=>!hidden.has(vid));
+  const rows=[...visible]; const present=new Set(visible.map(m=>m.vendorId));
   sug.forEach(vid=>{ if(!present.has(vid)) rows.push({vendorId:vid,status:'未詢價',price:'',moq:'',lead:'',note:'',chosen:false,_sug:true}); });
   if(!rows.length) return '<div class="muted" style="font-size:12px">此類型暫無建議廠商，可從下方下拉手動加入。</div>'+addVendorRow(it);
   let h='<table class="qtab"><thead><tr><th>選定</th><th>廠商</th><th>狀態</th><th>單價</th><th>規格/MOQ</th><th>交期</th><th>備註</th><th></th></tr></thead><tbody>';
@@ -603,7 +608,10 @@ function quoteTable(it){
   return h;
 }
 function addVendorRow(it){
-  const used=new Set(matchesFor(it.id).map(m=>m.vendorId).concat(suggestedVendors(it).map(v=>v.id)));
+  const ms=matchesFor(it.id);
+  const hidden=new Set(ms.filter(m=>m.hidden).map(m=>m.vendorId));
+  const used=new Set(ms.filter(m=>!m.hidden).map(m=>m.vendorId)
+    .concat(suggestedVendors(it).filter(v=>!hidden.has(v.id)).map(v=>v.id)));
   const opts=DB.vendors.filter(v=>!used.has(v.id));
   return `<div class="addv"><select onchange="if(this.value){addMatch('${it.id}',this.value);this.value=''}">
     <option value="">＋ 手動加入其他廠商…</option>
@@ -632,12 +640,16 @@ function toggleItem(id){ openItems[id]=!openItems[id];
   document.getElementById('item-'+id).classList.toggle('open'); }
 function getMatch(iid,vid){ if(!DB.matches[iid]) DB.matches[iid]=[];
   let m=DB.matches[iid].find(x=>x.vendorId===vid);
-  if(!m){ m={vendorId:vid,status:'未詢價',price:'',moq:'',lead:'',note:'',chosen:false}; DB.matches[iid].push(m); }
+  if(!m){ m={vendorId:vid,status:'未詢價',price:'',moq:'',lead:'',note:'',chosen:false,hidden:false}; DB.matches[iid].push(m); }
   return m; }
 async function upd(iid,vid,f,val){ if(!requireWrite())return; const m=getMatch(iid,vid); m[f]=val; await upMatch(iid,m); refreshItem(iid); }
-async function addMatch(iid,vid){ if(!requireWrite())return; const m=getMatch(iid,vid); await upMatch(iid,m); refreshItem(iid); }
-async function rmMatch(iid,vid){ if(!requireWrite())return; if(DB.matches[iid]) DB.matches[iid]=DB.matches[iid].filter(m=>m.vendorId!==vid);
-  await delMatchCloud(iid,vid); refreshItem(iid); }
+async function addMatch(iid,vid){ if(!requireWrite())return; const m=getMatch(iid,vid); m.hidden=false; await upMatch(iid,m); refreshItem(iid); }
+async function rmMatch(iid,vid){ if(!requireWrite())return;
+  const it=DB.items.find(i=>i.id===iid);
+  const isSug=!!(it && suggestedVendors(it).some(v=>v.id===vid));
+  if(isSug){ const m=getMatch(iid,vid); m.hidden=true; m.chosen=false; await upMatch(iid,m); }   // 建議廠商：隱藏（否則會被重新建議）
+  else { if(DB.matches[iid]) DB.matches[iid]=DB.matches[iid].filter(m=>m.vendorId!==vid); await delMatchCloud(iid,vid); }
+  refreshItem(iid); }
 async function setChosen(iid,vid){ if(!requireWrite())return; const m=getMatch(iid,vid); const was=m.chosen;
   (DB.matches[iid]||[]).forEach(x=>x.chosen=false); m.chosen=!was;
   if(m.chosen && m.status==='未詢價') m.status='已選定';
@@ -720,7 +732,7 @@ async function importJSON(e){ if(!requireWrite()){ e.target.value=''; return; } 
     catch(err){ alert('檔案格式不正確'); } }; r.readAsText(f); e.target.value=''; }
 function exportCSV(){
   const rows=[['群組','品項','規格','適配類型','對應產品','廠商','狀態','單價','MOQ/規格','交期','選定','備註']];
-  DB.items.forEach(it=>{ const ms=matchesFor(it.id); const sug=suggestedVendors(it);
+  DB.items.forEach(it=>{ const ms=matchesFor(it.id).filter(m=>!m.hidden); const sug=suggestedVendors(it);
     const list=ms.length?ms:sug.map(v=>({vendorId:v.id,status:'未詢價',price:'',moq:'',lead:'',note:'',chosen:false}));
     if(!list.length){ rows.push([it.group,it.name,it.spec,CAT[it.type]||it.type,it.prod,'','','','','','','']); return; }
     list.forEach(m=>{ const v=DB.vendors.find(x=>x.id===m.vendorId);
