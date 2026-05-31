@@ -268,6 +268,29 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
       <button class="btn ghost wr-data" onclick="resetAll()">↺ 清空並重置為預設</button>
     </div>
 
+    <h2><span class="n">建表</span>雲端資料表 SQL（產品模組）</h2>
+    <div class="note">若「產品管理」出現「尚未建立 products 表」警告，把下面整段貼到 <b>Supabase → SQL Editor</b> 執行一次（選 Run without RLS）。執行後重整本頁即可正常儲存產品 / 綁定 / 照片。</div>
+    <textarea readonly onclick="this.select()" style="width:100%;min-height:230px;border:1.5px solid var(--line2);padding:10px;font-family:var(--mono);font-size:12px;margin-top:8px;background:#fff">alter table items add column if not exists material text;
+
+create table if not exists products(
+  id text primary key, category text, name text, english_name text,
+  price text, note text, is_active boolean default true, sort int default 0);
+
+create table if not exists product_packaging(
+  product_id text references products(id) on delete cascade,
+  packaging_id text references items(id) on delete cascade,
+  sort int default 0, primary key(product_id, packaging_id));
+
+create table if not exists packaging_images(
+  id bigint generated always as identity primary key,
+  packaging_id text references items(id) on delete cascade,
+  image_url text, label text, sort_order int default 0);
+
+alter publication supabase_realtime add table products;
+alter publication supabase_realtime add table product_packaging;
+alter publication supabase_realtime add table packaging_images;</textarea>
+    <div class="note" style="margin-top:8px">照片上傳另需在 <b>Storage</b> 建一個<b>公開 bucket：packaging-photos</b>，並開放 anon 的 SELECT/INSERT 政策。</div>
+
     <h2><span class="n">說明</span>適配類型對照</h2>
     <div id="legendcat" class="note" style="line-height:1.9"></div>
   </section>
@@ -522,6 +545,7 @@ const SEED_ITEMS = [
 let cloud=false, sb=null, DB={vendors:[],items:[],matches:{},products:[],prodPack:{},images:{}};
 let openItems={}, editingItem=null, editingVendor=null, vmCats=[];
 let editingProduct=null, anMode='p2p', detailPackId=null, batchRows=[], selCat=null, pmEnTouched=false;
+let cloudMissingProducts=false;   // 雲端缺 products 表時為 true → 警告使用者，避免白打資料不落地
 const KEY='ground_pack_v1';
 
 /* ============ 帳號 / 登入 ============ */
@@ -650,9 +674,10 @@ async function cloudLoad(){
   (mr.data||[]).forEach(r=>{ (DB.matches[r.item_id]=DB.matches[r.item_id]||[]).push(
     {vendorId:r.vendor_id,status:r.status,price:r.price,moq:r.moq,lead:r.lead,note:r.note,chosen:r.chosen,hidden:!!r.hidden}); });
   // ↓ 新表：各自容錯，未建表時不影響其他資料
-  DB.products=[]; DB.prodPack={}; DB.images={};
+  DB.products=[]; DB.prodPack={}; DB.images={}; cloudMissingProducts=false;
   try{ const pr=await sb.from('products').select('*').order('sort');
-    if(!pr.error) DB.products=(pr.data||[]).map(r=>({id:r.id,category:r.category,name:r.name,en:r.english_name,price:r.price,note:r.note,active:r.is_active!==false,sort:r.sort||0})); }catch(e){}
+    if(pr.error) cloudMissingProducts=true;
+    else DB.products=(pr.data||[]).map(r=>({id:r.id,category:r.category,name:r.name,en:r.english_name,price:r.price,note:r.note,active:r.is_active!==false,sort:r.sort||0})); }catch(e){ cloudMissingProducts=true; }
   try{ const rr=await sb.from('product_packaging').select('*');
     if(!rr.error)(rr.data||[]).forEach(r=>{ (DB.prodPack[r.product_id]=DB.prodPack[r.product_id]||[]).push(r.packaging_id); }); }catch(e){}
   try{ const gr=await sb.from('packaging_images').select('*').order('sort_order');
@@ -950,7 +975,8 @@ function renderProducts(){
   const q=((document.getElementById('prodSearch')||{}).value||'').trim().toLowerCase();
   const catf=(document.getElementById('prodCatFilter')||{}).value||'';
   const onlyActive=(document.getElementById('prodHideInactive')||{}).checked;
-  if(!DB.products.length){ el.innerHTML='<div class="note">還沒有產品。點右上「＋ 新增產品」開始（若雲端尚未建 products 等資料表，請先到「設定 / 備份」看建表 SQL）。</div>'; renderCatPhotos(); return; }
+  const warn = cloudMissingProducts ? '<div class="note" style="border-color:var(--accent);color:var(--accent-d)"><b>⚠ 雲端尚未建立 products 等資料表</b>，現在輸入的產品<b>不會被儲存</b>、重整就會消失。請先到 Supabase 執行建表 SQL（見「設定 / 備份」頁），完成後重整即可正常保存。</div>' : '';
+  if(!DB.products.length){ el.innerHTML=warn+'<div class="note">還沒有產品。點右上「＋ 新增產品」開始。</div>'; renderCatPhotos(); return; }
   let list=DB.products.filter(p=>{
     if(catf && (p.category||'未分類')!==catf) return false;
     if(onlyActive && p.active===false) return false;
@@ -971,7 +997,7 @@ function renderProducts(){
         <td>${p.active===false?'<span class="badge off">停用</span>':'<span class="badge gn">啟用</span>'}</td>
         <td><button class="btn ghost sm wr-products" onclick="event.stopPropagation();openProduct('${p.id}')">編輯</button></td></tr>`; });
     h+='</tbody></table>'; });
-  el.innerHTML=h;
+  el.innerHTML=warn+h;
   renderCatPhotos();
 }
 function renderCatPhotos(){
@@ -1033,6 +1059,7 @@ async function autoTranslateEn(force){
     if(force) alert('自動翻譯失敗：'+(err&&err.message?err.message:err)+'\n\n需在 Vercel 設定 ANTHROPIC_API_KEY（與截圖辨識同一把）。可先手動輸入英文。'); }
 }
 async function saveProduct(){ if(!requireWrite('products'))return;
+  if(cloud && cloudMissingProducts){ alert('雲端尚未建立 products 資料表，現在無法儲存產品。\n請先到 Supabase SQL Editor 執行建表 SQL（見「設定 / 備份」頁），完成後重整再新增。'); return; }
   const o={category:pm_cat.value, name:pm_name.value.trim(), en:pm_en.value.trim(),
     price:pm_price.value.trim(), note:pm_note.value.trim(), active:pm_active.checked};
   if(!o.name){ alert('請輸入品名'); return; }
@@ -1231,6 +1258,7 @@ function renderBatchRows(){
   el.innerHTML=h;
 }
 async function batchImport(){ if(!requireWrite('products'))return;
+  if(cloud && cloudMissingProducts){ alert('雲端尚未建立 products 資料表，現在匯入不會被保存。\n請先到 Supabase 執行建表 SQL（見「設定 / 備份」頁），完成後重整再匯入。'); return; }
   const rows=batchRows.filter(r=>(r.name||'').trim());
   if(!rows.length){ alert('沒有可匯入的資料（品名不可空白）。'); return; }
   let base=(DB.products.reduce((m,x)=>Math.max(m,x.sort||0),0))+1;
