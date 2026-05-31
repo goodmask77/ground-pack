@@ -176,6 +176,19 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
 .minichip{font-size:11px;background:var(--paper2);border:1px solid var(--line);padding:1px 7px;cursor:pointer}
 .minichip:hover{border-color:var(--ink)}
 .linkish{color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+/* 心智圖 */
+.mind-wrap{position:relative;overflow:hidden;height:72vh;border:1.5px solid var(--line2);background:var(--card);background-image:radial-gradient(var(--line) 0.6px,transparent 0.6px);background-size:24px 24px;margin-top:10px;cursor:grab}
+.mind-wrap.drag{cursor:grabbing}
+.mind-stage{position:absolute;left:0;top:0;transform-origin:0 0}
+.mnode{position:absolute;transform:translate(-50%,-50%);background:var(--paper);border:1.5px solid var(--line2);border-radius:16px;padding:6px 12px;font-size:13px;white-space:nowrap;cursor:pointer;user-select:none;box-shadow:0 1px 3px rgba(0,0,0,.08);z-index:2}
+.mnode:hover{border-color:var(--ink);box-shadow:0 2px 8px rgba(0,0,0,.16)}
+.mnode.root{background:var(--ink);color:var(--paper);font-weight:700;font-size:15px;border-color:var(--ink);cursor:default}
+.mnode.cat{font-weight:700;font-family:var(--disp)}
+.mnode.product{max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.mnode.pack{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px;max-width:120px}
+.mnode.pack img{width:62px;height:62px;object-fit:cover;border:1px solid var(--line2);border-radius:6px;display:block;background:var(--paper2)}
+.mnode .sub{font-family:var(--mono);font-size:10px;color:var(--ink2)}
+.mind-stage svg{position:absolute;left:0;top:0;overflow:visible;z-index:1;pointer-events:none}
 </style>
 </head>
 <body>
@@ -192,6 +205,7 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
       <button class="tab" data-tab="items">需求 × 廠商對應</button>
       <button class="tab" data-tab="vendors">廠商</button>
       <button class="tab" data-tab="analysis">分析中心</button>
+      <button class="tab" data-tab="mind">心智圖</button>
       <button class="tab" data-tab="data">設定 / 備份</button>
       <button class="tab" data-tab="history">修改紀錄</button>
       <button class="tab hide" id="tab-accounts" data-tab="accounts">帳號</button>
@@ -242,6 +256,17 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
       <button class="btn acc sm wr-vendors" style="margin-left:auto" onclick="openVendor()">＋ 新增廠商</button></h2>
     <div id="noperm-vendors" class="note" style="border-color:var(--accent);color:var(--accent-d)">🔒 你沒有「廠商」頁的編輯權限，目前為唯讀。需要編輯請聯絡管理員開放。</div>
     <div id="vendorgrid" class="vgrid"></div>
+  </section>
+
+  <section id="mind" class="hide">
+    <h2 style="margin-top:18px"><span class="n">心智圖</span>產品包材心智圖
+      <span style="margin-left:auto;display:flex;gap:6px">
+        <button class="btn ghost sm" onclick="mindZoom(1.2)">＋</button>
+        <button class="btn ghost sm" onclick="mindZoom(0.8)">－</button>
+        <button class="btn ghost sm" onclick="renderMind()">↻ 重新整理 / 置中</button>
+      </span></h2>
+    <div class="note">中心 → 類別 → 產品 → 包材，自動依產品/包材資料生成。<b>拖曳</b>平移、<b>滾輪</b>縮放、<b>點產品/包材節點</b>看詳情。</div>
+    <div id="mindwrap" class="mind-wrap"></div>
   </section>
 
   <section id="analysis" class="hide">
@@ -1423,6 +1448,75 @@ function renderAnalysis(){ renderAnModes(); const el=document.getElementById('an
     return; }
 }
 
+/* ============ 心智圖（中心 → 類別 → 產品 → 包材，放射狀） ============ */
+const MIND_COLORS=['#c4582a','#3f7d4e','#3a6ea5','#c98a14','#6b4a86','#a4441d','#2f7d7a','#9b5d2a','#b3492f','#477a52'];
+let mindT={x:0,y:0,s:1}, mindWH={w:0,h:0};
+function buildMindTree(){
+  const root={name:'產品包材',kind:'root',children:[]};
+  const cats=[...new Set(catList().concat('未分類'))];
+  cats.forEach((c,ci)=>{
+    const ps=DB.products.filter(p=>(p.category||'未分類')===c && p.active!==false).sort((a,b)=>(a.sort||0)-(b.sort||0));
+    if(!ps.length) return;
+    const color=MIND_COLORS[ci%MIND_COLORS.length];
+    const catNode={name:c,kind:'cat',color,children:[]};
+    ps.forEach(p=>{ const prod={name:p.name,kind:'product',id:p.id,color,children:[]};
+      packagingOf(p.id).forEach(it=>{ const img=(DB.images[it.id]||[])[0];
+        prod.children.push({name:it.name,kind:'pack',id:it.id,color,img:img?img.url:'',spec:it.spec||''}); });
+      catNode.children.push(prod); });
+    root.children.push(catNode);
+  });
+  return root;
+}
+function mindLayout(root){
+  const R=[0,250,470,690];
+  (function weight(n){ n.w=(n.children&&n.children.length)?n.children.reduce((s,c)=>s+weight(c),0):1; return n.w; })(root);
+  (function assign(n,a0,a1,depth){ n.depth=depth; n.angle=(a0+a1)/2;
+    const r=R[Math.min(depth,R.length-1)]; n.x=Math.cos(n.angle)*r; n.y=Math.sin(n.angle)*r;
+    if(n.children&&n.children.length){ const tot=n.children.reduce((s,c)=>s+c.w,0)||1; let a=a0;
+      n.children.forEach(c=>{ const span=(a1-a0)*c.w/tot; assign(c,a,a+span,depth+1); a+=span; }); }
+  })(root, -Math.PI/2, -Math.PI/2+Math.PI*2, 0);
+  return root;
+}
+function mindCollect(root){ const nodes=[],edges=[];
+  (function walk(n,parent){ nodes.push(n); if(parent) edges.push({a:parent,b:n,color:n.color||'#9b9384'}); (n.children||[]).forEach(c=>walk(c,n)); })(root,null);
+  return {nodes,edges}; }
+function renderMind(){
+  const wrap=document.getElementById('mindwrap'); if(!wrap) return;
+  if(!DB.products.length){ wrap.innerHTML='<div class="note" style="margin:20px">尚無產品。先到「產品管理」新增產品並綁定包材，心智圖會自動生成。</div>'; return; }
+  const root=mindLayout(buildMindTree());
+  if(!root.children.length){ wrap.innerHTML='<div class="note" style="margin:20px">目前沒有啟用中的產品可顯示。</div>'; return; }
+  const {nodes,edges}=mindCollect(root);
+  let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+  nodes.forEach(n=>{ minX=Math.min(minX,n.x); minY=Math.min(minY,n.y); maxX=Math.max(maxX,n.x); maxY=Math.max(maxY,n.y); });
+  const pad=140, offX=-minX+pad, offY=-minY+pad, W=maxX-minX+pad*2, H=maxY-minY+pad*2;
+  let svg='';
+  edges.forEach(e=>{ const x1=(e.a.x+offX),y1=(e.a.y+offY),x2=(e.b.x+offX),y2=(e.b.y+offY); const mx=(x1+x2)/2;
+    svg+=`<path d="M${x1.toFixed(1)},${y1.toFixed(1)} C ${mx.toFixed(1)},${y1.toFixed(1)} ${mx.toFixed(1)},${y2.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}" fill="none" stroke="${e.color}" stroke-width="2.2" opacity="0.55"/>`; });
+  let html='';
+  nodes.forEach(n=>{ const x=(n.x+offX).toFixed(1), y=(n.y+offY).toFixed(1); let inner='',style='',oc='';
+    if(n.kind==='root'){ inner=esc(n.name); }
+    else if(n.kind==='cat'){ inner=esc(n.name); style=`border-color:${n.color};color:${n.color}`; }
+    else if(n.kind==='product'){ inner=esc(n.name); style=`border-left:4px solid ${n.color}`; oc=`onclick="productDetail('${n.id}')"`; }
+    else { inner=(n.img?`<img src="${esc(n.img)}" alt="">`:'')+`<span>${esc(n.name)}</span>`+(n.spec?`<span class="sub">${esc(n.spec)}</span>`:''); style=`border-color:${n.color}`; oc=`onclick="packDetail('${n.id}')"`; }
+    html+=`<div class="mnode ${n.kind}" style="left:${x}px;top:${y}px;${style}" ${oc}>${inner}</div>`; });
+  wrap.innerHTML=`<div class="mind-stage" id="mindstage"><svg width="${W.toFixed(0)}" height="${H.toFixed(0)}">${svg}</svg>${html}</div>`;
+  mindWH={w:W,h:H}; mindFit();
+}
+function mindApply(){ const st=document.getElementById('mindstage'); if(st) st.style.transform=`translate(${mindT.x}px,${mindT.y}px) scale(${mindT.s})`; }
+function mindFit(){ const wrap=document.getElementById('mindwrap'); if(!wrap||!mindWH.w) return; const vw=wrap.clientWidth, vh=wrap.clientHeight;
+  const s=Math.min(vw/mindWH.w, vh/mindWH.h, 1)*0.95; mindT.s=s; mindT.x=(vw-mindWH.w*s)/2; mindT.y=(vh-mindWH.h*s)/2; mindApply(); }
+function mindZoom(f){ const wrap=document.getElementById('mindwrap'); if(!wrap) return; const cx=wrap.clientWidth/2, cy=wrap.clientHeight/2;
+  const ns=Math.min(3,Math.max(0.08,mindT.s*f)); mindT.x=cx-(cx-mindT.x)*(ns/mindT.s); mindT.y=cy-(cy-mindT.y)*(ns/mindT.s); mindT.s=ns; mindApply(); }
+function mindSetup(){ const wrap=document.getElementById('mindwrap'); if(!wrap||wrap._mset) return; wrap._mset=true;
+  let dragging=false,sx,sy,ox,oy;
+  wrap.addEventListener('mousedown',e=>{ if(e.target.closest('.mnode')) return; dragging=true; wrap.classList.add('drag'); sx=e.clientX; sy=e.clientY; ox=mindT.x; oy=mindT.y; });
+  window.addEventListener('mousemove',e=>{ if(!dragging) return; mindT.x=ox+(e.clientX-sx); mindT.y=oy+(e.clientY-sy); mindApply(); });
+  window.addEventListener('mouseup',()=>{ if(dragging){ dragging=false; wrap.classList.remove('drag'); } });
+  wrap.addEventListener('wheel',e=>{ e.preventDefault(); const r=wrap.getBoundingClientRect(); const cx=e.clientX-r.left, cy=e.clientY-r.top;
+    const f=e.deltaY<0?1.1:0.9; const ns=Math.min(3,Math.max(0.08,mindT.s*f));
+    mindT.x=cx-(cx-mindT.x)*(ns/mindT.s); mindT.y=cy-(cy-mindT.y)*(ns/mindT.s); mindT.s=ns; mindApply(); },{passive:false});
+}
+
 /* ============ 批量上傳產品（截圖辨識 / 貼上文字） ============ */
 function openBatch(){ if(!requireWrite('products'))return; batchRows=[]; batchMode('img');
   document.getElementById('bm_text').value=''; document.getElementById('bm_imgstatus').textContent='';
@@ -1535,13 +1629,14 @@ function closeModal(id){ document.getElementById(id).classList.remove('on'); }
 /* ===== Tabs ===== */
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on')); t.classList.add('on');
-  ['dash','products','items','vendors','analysis','data','history','accounts'].forEach(s=>document.getElementById(s).classList.add('hide'));
+  ['dash','products','items','vendors','analysis','mind','data','history','accounts'].forEach(s=>document.getElementById(s).classList.add('hide'));
   document.getElementById(t.dataset.tab).classList.remove('hide');
   if(t.dataset.tab==='dash') renderDash();
   if(t.dataset.tab==='products') renderProducts();
   if(t.dataset.tab==='items') renderItems();
   if(t.dataset.tab==='vendors') renderVendors();
   if(t.dataset.tab==='analysis') renderAnalysis();
+  if(t.dataset.tab==='mind'){ mindSetup(); renderMind(); }
   if(t.dataset.tab==='data') renderAiUsage();
   if(t.dataset.tab==='history') renderHistory();
   if(t.dataset.tab==='accounts') renderAccounts();
