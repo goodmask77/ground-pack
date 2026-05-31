@@ -26,7 +26,9 @@ ground-pack/
 └── .gitignore      ← 排除 .vercel / .DS_Store
 ```
 
-- `api/extract.js` 用 **CommonJS**（`module.exports`，因無 package.json type:module）。需 Vercel 環境變數 `ANTHROPIC_API_KEY`（可選 `EXTRACT_MODEL`，預設 claude-sonnet-4-6）。同網域 `POST /api/extract`，本機 file:// 開啟無法用。
+- serverless functions（皆 **CommonJS**，因無 package.json type:module）共用 Vercel 環境變數 `ANTHROPIC_API_KEY`，同網域 POST、本機 file:// 無法用：
+  - `api/extract.js`：截圖→產品 JSON（可選 `EXTRACT_MODEL`，預設 claude-sonnet-4-6）。
+  - `api/translate.js`：中文品名→英文菜單名（可選 `TRANSLATE_MODEL`，預設 claude-haiku）。產品視窗 `autoTranslateEn()`：品名 blur 時若英文欄空就自動翻譯帶入；`pmEnTouched` 防止覆蓋手動輸入；「🔄 自動翻譯」可強制重翻。
 
 ## 部署流程（不要再用 vercel --prod）
 
