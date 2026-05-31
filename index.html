@@ -212,15 +212,17 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
 
   <section id="products" class="hide">
     <h2 style="margin-top:18px"><span class="n">產品</span>產品管理
-      <button class="btn ghost sm wr-products" style="margin-left:auto" onclick="openBatch()">⤓ 批量上傳</button>
+      <button class="btn ghost sm wr-products" style="margin-left:auto" onclick="openSettings()">⚙ 選單設定</button>
+      <button class="btn ghost sm wr-products" onclick="openBatch()">⤓ 批量上傳</button>
       <button class="btn acc sm wr-products" onclick="openProduct()">＋ 新增產品</button></h2>
     <div id="noperm-products" class="note" style="border-color:var(--accent);color:var(--accent-d)">🔒 你沒有「產品管理」頁的編輯權限，目前為唯讀。需要編輯請聯絡管理員開放。</div>
-    <div class="note">產品為系統核心：產品 → 綁定包材 → 包材對應供應商。點產品卡片可看詳情並綁定包材。</div>
+    <div class="note">產品為系統核心：產品 → 綁定包材 → 包材對應供應商。類別可折疊；「⚙ 選單設定」可預設類別 / 單位 / 標籤。</div>
     <div class="row" style="margin-top:10px;gap:10px">
       <input id="prodSearch" placeholder="🔍 搜尋產品名稱…" style="border:1.5px solid var(--line2);padding:7px 10px;background:#fff;min-width:220px" oninput="renderProducts()">
       <select id="prodCatFilter" style="border:1.5px solid var(--line2);padding:7px 10px;background:#fff" onchange="renderProducts()"></select>
       <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" id="prodHideInactive" style="width:auto" onchange="renderProducts()"> 只看啟用中</label>
     </div>
+    <div id="tagfilter" class="row" style="margin-top:10px;gap:6px;flex-wrap:wrap"></div>
     <div class="pcols">
       <div id="productlist"></div>
       <div id="catphotos" class="catpanel"></div>
@@ -299,10 +301,15 @@ create table if not exists ai_usage(
 
 create table if not exists categories(name text primary key, sort int default 0);
 
+alter table products add column if not exists unit text;
+alter table products add column if not exists tags jsonb default '[]'::jsonb;
+create table if not exists app_options(kind text, name text, sort int default 0, primary key(kind,name));
+
 alter publication supabase_realtime add table products;
 alter publication supabase_realtime add table product_packaging;
 alter publication supabase_realtime add table packaging_images;
-alter publication supabase_realtime add table categories;</textarea>
+alter publication supabase_realtime add table categories;
+alter publication supabase_realtime add table app_options;</textarea>
     <div class="note" style="margin-top:8px">照片上傳另需在 <b>Storage</b> 建一個<b>公開 bucket：packaging-photos</b>，並開放 anon 的 SELECT/INSERT 政策。</div>
     </details>
 
@@ -377,8 +384,9 @@ alter publication supabase_realtime add table categories;</textarea>
 <div class="ov" id="productModal"><div class="modal">
   <h3 id="pmTitle">新增產品</h3>
   <div class="row" style="gap:11px">
-    <div class="fld" style="flex:1"><label>類別</label><select id="pm_cat"></select></div>
-    <div class="fld" style="flex:1"><label>售價</label><input id="pm_price" placeholder="120 / 依規格"></div>
+    <div class="fld" style="flex:1.4"><label>類別</label><select id="pm_cat"></select></div>
+    <div class="fld" style="flex:1"><label>單位</label><select id="pm_unit"></select></div>
+    <div class="fld" style="flex:1"><label>售價</label><input id="pm_price" placeholder="120"></div>
   </div>
   <div class="row" style="gap:11px">
     <div class="fld" style="flex:2"><label>品名</label><input id="pm_name" placeholder="例：冰美式" onblur="autoTranslateEn()"></div>
@@ -386,6 +394,7 @@ alter publication supabase_realtime add table categories;</textarea>
       <label>英文名稱 <span class="linkish" style="font-size:11px" onclick="autoTranslateEn(true)">🔄 自動翻譯</span> <span id="pm_en_status" class="muted mono" style="font-size:10px"></span></label>
       <input id="pm_en" placeholder="輸入品名後自動帶入，可手動修改" oninput="pmEnTouched=true"></div>
   </div>
+  <div class="fld"><label>#標籤（點選切換，可篩選）<span class="linkish" style="font-size:11px" onclick="addTagOption()">＋ 新標籤</span></label><div class="chips" id="pm_tags"></div></div>
   <div class="fld"><label>備註</label><textarea id="pm_note"></textarea></div>
   <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" id="pm_active" style="width:auto" checked> 啟用中（停用的產品不列入分析）</label>
   <div class="modacts">
@@ -393,6 +402,14 @@ alter publication supabase_realtime add table categories;</textarea>
     <button class="btn ghost" onclick="closeModal('productModal')">取消</button>
     <button class="btn acc" onclick="saveProduct()">儲存</button>
   </div>
+</div></div>
+
+<!-- SETTINGS MODAL（選單設定：類別/單位/標籤）-->
+<div class="ov" id="settingsModal"><div class="modal" style="max-width:560px">
+  <h3>⚙ 選單設定</h3>
+  <div class="note" style="margin-top:0">先設定好「類別 / 單位 / #標籤」，新增產品時就能直接下拉選。↑↓ 排序、× 刪除。</div>
+  <div id="settingsBody" style="margin-top:6px"></div>
+  <div class="modacts"><button class="btn acc" onclick="closeModal('settingsModal')">完成</button></div>
 </div></div>
 
 <!-- PRODUCT DETAIL MODAL -->
@@ -557,8 +574,10 @@ const SEED_ITEMS = [
 ].map((r,i)=>({id:'i'+(i+1),group:r[0],name:r[1],type:r[2],spec:r[3],prod:r[4],note:r[5],sort:i}));
 
 /* ============ 狀態 ============ */
-let cloud=false, sb=null, DB={vendors:[],items:[],matches:{},products:[],prodPack:{},images:{},cats:[]};
-let cloudMissingCats=false, dragProdId=null, dragCatName=null;
+let cloud=false, sb=null, DB={vendors:[],items:[],matches:{},products:[],prodPack:{},images:{},cats:[],options:{unit:[],tag:[]}};
+let cloudMissingCats=false, cloudMissingOpts=false, dragProdId=null, dragCatName=null;
+let selTag=null, collapsedCats={}, pmTags=[];
+const DEFAULT_UNITS=['個','箱','包','條','份','張','組','杯','份量'];
 let openItems={}, editingItem=null, editingVendor=null, vmCats=[];
 let editingProduct=null, anMode='p2p', detailPackId=null, batchRows=[], selCat=null, pmEnTouched=false;
 let cloudMissingProducts=false;   // 雲端缺 products 表時為 true → 警告使用者，避免白打資料不落地
@@ -672,9 +691,10 @@ async function loadLocal(){ let raw=null;
   catch(e){ try{ raw=localStorage.getItem(KEY);}catch(_){} }
   if(raw){ try{ DB=JSON.parse(raw);}catch(e){ seedLocal(); } } else seedLocal();
   if(!DB.vendors)DB.vendors=[]; if(!DB.items)DB.items=[]; if(!DB.matches)DB.matches={}; if(!DB.accounts)DB.accounts=[]; if(!DB.history)DB.history=[];
-  if(!DB.products)DB.products=[]; if(!DB.prodPack)DB.prodPack={}; if(!DB.images)DB.images={}; if(!DB.cats)DB.cats=[]; }
+  if(!DB.products)DB.products=[]; if(!DB.prodPack)DB.prodPack={}; if(!DB.images)DB.images={}; if(!DB.cats)DB.cats=[];
+  if(!DB.options)DB.options={unit:[],tag:[]}; }
 function seedLocal(){ DB={vendors:JSON.parse(JSON.stringify(SEED_VENDORS)),
-  items:JSON.parse(JSON.stringify(SEED_ITEMS)), matches:{}, accounts:[], history:[], products:[], prodPack:{}, images:{}, cats:[]}; }
+  items:JSON.parse(JSON.stringify(SEED_ITEMS)), matches:{}, accounts:[], history:[], products:[], prodPack:{}, images:{}, cats:[], options:{unit:[],tag:[]}}; }
 
 /* ============ 雲端層 ============ */
 async function cloudLoad(){
@@ -690,13 +710,16 @@ async function cloudLoad(){
   (mr.data||[]).forEach(r=>{ (DB.matches[r.item_id]=DB.matches[r.item_id]||[]).push(
     {vendorId:r.vendor_id,status:r.status,price:r.price,moq:r.moq,lead:r.lead,note:r.note,chosen:r.chosen,hidden:!!r.hidden}); });
   // ↓ 新表：各自容錯，未建表時不影響其他資料
-  DB.products=[]; DB.prodPack={}; DB.images={}; DB.cats=[]; cloudMissingProducts=false; cloudMissingCats=false;
+  DB.products=[]; DB.prodPack={}; DB.images={}; DB.cats=[]; DB.options={unit:[],tag:[]}; cloudMissingProducts=false; cloudMissingCats=false; cloudMissingOpts=false;
   try{ const cr=await sb.from('categories').select('*').order('sort');
     if(cr.error) cloudMissingCats=true;
     else DB.cats=(cr.data||[]).map(r=>({name:r.name,sort:r.sort||0})); }catch(e){ cloudMissingCats=true; }
+  try{ const or=await sb.from('app_options').select('*').order('sort');
+    if(or.error) cloudMissingOpts=true;
+    else (or.data||[]).forEach(r=>{ (DB.options[r.kind]=DB.options[r.kind]||[]).push(r.name); }); }catch(e){ cloudMissingOpts=true; }
   try{ const pr=await sb.from('products').select('*').order('sort');
     if(pr.error) cloudMissingProducts=true;
-    else DB.products=(pr.data||[]).map(r=>({id:r.id,category:r.category,name:r.name,en:r.english_name,price:r.price,note:r.note,active:r.is_active!==false,sort:r.sort||0})); }catch(e){ cloudMissingProducts=true; }
+    else DB.products=(pr.data||[]).map(r=>({id:r.id,category:r.category,name:r.name,en:r.english_name,price:r.price,note:r.note,active:r.is_active!==false,unit:r.unit||'',tags:Array.isArray(r.tags)?r.tags:[],sort:r.sort||0})); }catch(e){ cloudMissingProducts=true; }
   try{ const rr=await sb.from('product_packaging').select('*');
     if(!rr.error)(rr.data||[]).forEach(r=>{ (DB.prodPack[r.product_id]=DB.prodPack[r.product_id]||[]).push(r.packaging_id); }); }catch(e){}
   try{ const gr=await sb.from('packaging_images').select('*').order('sort_order');
@@ -716,10 +739,18 @@ async function upMatch(iid,m){ if(!cloud) return persist();
   if(error){ const r2={...row}; delete r2.hidden; await sb.from('matches').upsert(r2); } }  // hidden 欄位未建時自動降級
 async function delMatchCloud(iid,vid){ if(!cloud) return persist(); await sb.from('matches').delete().eq('item_id',iid).eq('vendor_id',vid); }
 /* 產品 / 綁定 / 照片 雲端寫入 */
+function prodRow(p){ return {id:p.id,category:p.category,name:p.name,english_name:p.en,price:p.price,note:p.note,is_active:p.active!==false,unit:p.unit||'',tags:Array.isArray(p.tags)?p.tags:[],sort:p.sort||0}; }
 async function upProduct(p){ if(!cloud) return persist();
-  await sb.from('products').upsert({id:p.id,category:p.category,name:p.name,english_name:p.en,price:p.price,note:p.note,is_active:p.active!==false,sort:p.sort||0}); }
+  const row=prodRow(p); const {error}=await sb.from('products').upsert(row);
+  if(error){ const r2={...row}; delete r2.unit; delete r2.tags; await sb.from('products').upsert(r2); } }  // unit/tags 欄位未建時降級
 async function upProductsBatch(arr){ if(!cloud) return persist();
-  await sb.from('products').upsert(arr.map(p=>({id:p.id,category:p.category,name:p.name,english_name:p.en,price:p.price,note:p.note,is_active:p.active!==false,sort:p.sort||0}))); }
+  const rows=arr.map(prodRow); const {error}=await sb.from('products').upsert(rows);
+  if(error){ await sb.from('products').upsert(rows.map(r=>{const x={...r};delete x.unit;delete x.tags;return x;})); } }
+/* 選項：單位 / 標籤（app_options 表，kind+name）*/
+function optList(kind){ const arr=(DB.options&&DB.options[kind])||[]; if(arr.length) return arr.slice(); return kind==='unit'?DEFAULT_UNITS.slice():[]; }
+async function saveOptOrder(kind,names){ DB.options[kind]=names.slice();
+  if(cloud){ try{ await sb.from('app_options').delete().eq('kind',kind); if(names.length) await sb.from('app_options').insert(names.map((n,i)=>({kind,name:n,sort:i}))); }catch(e){} } else await persist(); }
+function allProductTags(){ const s=new Set(); (DB.products||[]).forEach(p=>(p.tags||[]).forEach(t=>s.add(t))); optList('tag').forEach(t=>s.add(t)); return [...s]; }
 /* 餐點類別 */
 function catList(){
   const fromTable=(DB.cats||[]).slice().sort((a,b)=>(a.sort||0)-(b.sort||0)).map(c=>c.name);
@@ -786,6 +817,7 @@ function subscribe(){ if(!cloud) return;
     .on('postgres_changes',{event:'*',schema:'public',table:'product_packaging'},refetchSoon)
     .on('postgres_changes',{event:'*',schema:'public',table:'packaging_images'},refetchSoon)
     .on('postgres_changes',{event:'*',schema:'public',table:'categories'},refetchSoon)
+    .on('postgres_changes',{event:'*',schema:'public',table:'app_options'},refetchSoon)
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'history'},()=>{
       if(!document.getElementById('history').classList.contains('hide')) renderHistory(); })
     .subscribe();
@@ -1046,10 +1078,12 @@ function renderProducts(){
   let list=DB.products.filter(p=>{
     if(catf && (p.category||'未分類')!==catf) return false;
     if(onlyActive && p.active===false) return false;
+    if(selTag && !((p.tags||[]).includes(selTag))) return false;
     if(q && !((p.name||'').toLowerCase().includes(q)||(p.en||'').toLowerCase().includes(q))) return false;
     return true; });
+  renderTagFilter();
   if(!list.length){ el.innerHTML='<div class="note">沒有符合條件的產品。</div>'; renderCatPhotos(); return; }
-  const editable = canEdit('products') && !q && !catf && !onlyActive;   // 只有未搜尋/未篩選時才開放拖曳排序與類別編輯
+  const editable = canEdit('products') && !q && !catf && !onlyActive && !selTag;   // 只有未搜尋/未篩選/未選標籤時才開放拖曳排序與類別編輯
   let cats;
   if(editable){ cats=catList().slice();
     if(DB.products.some(p=>!(p.category||'').trim()) && !cats.includes('未分類')) cats.push('未分類'); }
@@ -1057,18 +1091,26 @@ function renderProducts(){
   const nonEmpty=cats.filter(c=>list.some(p=>(p.category||'未分類')===c));
   if(!selCat || !cats.includes(selCat)) selCat=nonEmpty[0]||cats[0]||null;
   let h='';
-  if(editable){ h+=`<div class="row" style="margin-bottom:8px;gap:8px;align-items:center"><span class="muted" style="font-size:12px">⠿ 拖曳可排序類別與產品（同類別內）</span><button class="btn ghost sm wr-products" style="margin-left:auto" onclick="addCategory()">＋ 新增類別</button></div>`; }
+  h+=`<div class="row" style="margin-bottom:8px;gap:8px;align-items:center">
+    <button class="btn ghost sm" onclick="setAllCats(false)">全部展開</button>
+    <button class="btn ghost sm" onclick="setAllCats(true)">全部折疊</button>
+    ${editable?'<span class="muted" style="font-size:12px;margin-left:6px">⠿ 拖曳排序　▶ 點箭頭折疊</span><button class="btn ghost sm wr-products" style="margin-left:auto" onclick="addCategory()">＋ 新增類別</button>':''}</div>`;
   cats.forEach(c=>{ const ps=list.filter(p=>(p.category||'未分類')===c).sort((a,b)=>(a.sort||0)-(b.sort||0));
+    const collapsed=!!collapsedCats[c];
+    const caret=`<span style="cursor:pointer;width:16px;display:inline-block;text-align:center" onclick="event.stopPropagation();toggleCat('${jsEsc(c)}')">${collapsed?'▶':'▼'}</span>`;
     h += editable
-      ? `<div class="acat click ${c===selCat?'sel':''}" draggable="true" ondragstart="dragCatStart(event,'${jsEsc(c)}')" ondragover="event.preventDefault()" ondrop="dragCatDrop(event,'${jsEsc(c)}')" onclick="selectCat('${jsEsc(c)}')"><span style="cursor:grab">⠿</span> ${esc(c)} <span class="c">${ps.length} 項</span><span style="margin-left:auto;display:flex;gap:6px;align-items:center">${c===selCat?'<span class="badge acc">▶ 看包材照片</span>':'<span class="muted" style="font-size:11px">點看包材照片</span>'}<button class="btn ghost sm" title="改名" onclick="event.stopPropagation();renameCategory('${jsEsc(c)}')">✎</button><button class="x" title="刪除類別" onclick="event.stopPropagation();deleteCategory('${jsEsc(c)}')">×</button></span></div>`
-      : `<div class="acat click ${c===selCat?'sel':''}" onclick="selectCat('${jsEsc(c)}')">${esc(c)} <span class="c">${ps.length} 項</span>${c===selCat?'<span class="badge acc" style="margin-left:auto">▶ 右側看包材照片</span>':'<span class="muted" style="margin-left:auto;font-size:11px">點此看包材照片</span>'}</div>`;
+      ? `<div class="acat click ${c===selCat?'sel':''}" draggable="true" ondragstart="dragCatStart(event,'${jsEsc(c)}')" ondragover="event.preventDefault()" ondrop="dragCatDrop(event,'${jsEsc(c)}')" onclick="selectCat('${jsEsc(c)}')">${caret}<span style="cursor:grab">⠿</span> ${esc(c)} <span class="c">${ps.length} 項</span><span style="margin-left:auto;display:flex;gap:6px;align-items:center">${c===selCat?'<span class="badge acc">▶ 看包材照片</span>':'<span class="muted" style="font-size:11px">點看包材照片</span>'}<button class="btn ghost sm" title="改名" onclick="event.stopPropagation();renameCategory('${jsEsc(c)}')">✎</button><button class="x" title="刪除類別" onclick="event.stopPropagation();deleteCategory('${jsEsc(c)}')">×</button></span></div>`
+      : `<div class="acat click ${c===selCat?'sel':''}" onclick="selectCat('${jsEsc(c)}')">${caret}${esc(c)} <span class="c">${ps.length} 項</span>${c===selCat?'<span class="badge acc" style="margin-left:auto">▶ 右側看包材照片</span>':'<span class="muted" style="margin-left:auto;font-size:11px">點此看包材照片</span>'}</div>`;
+    if(collapsed) return;
     if(!ps.length){ h+='<div class="muted" style="font-size:12px;padding:6px 2px 2px">（尚無產品）</div>'; return; }
-    h+='<table class="atable"><thead><tr>'+(editable?'<th style="width:18px"></th>':'')+'<th>品名</th><th>售價</th><th>包材</th><th>狀態</th><th></th></tr></thead><tbody>';
+    h+='<table class="atable"><thead><tr>'+(editable?'<th style="width:18px"></th>':'')+'<th>品名</th><th>單位</th><th>售價</th><th>包材</th><th>狀態</th><th></th></tr></thead><tbody>';
     ps.forEach(p=>{ const cnt=(DB.prodPack[p.id]||[]).filter(id=>DB.items.find(i=>i.id===id)).length;
       const dattr = editable ? `draggable="true" ondragstart="dragProdStart(event,'${p.id}')" ondragover="event.preventDefault()" ondrop="dragProdDrop(event,'${p.id}')"` : '';
+      const tagHtml=(p.tags||[]).length?`<div class="chiplist" style="margin-top:3px">${(p.tags||[]).map(t=>`<span class="minichip" onclick="event.stopPropagation();setTagFilter('${jsEsc(t)}')">#${esc(t)}</span>`).join('')}</div>`:'';
       h+=`<tr style="cursor:pointer" ${dattr} onclick="productDetail('${p.id}')">
         ${editable?'<td style="cursor:grab;color:var(--ink2)">⠿</td>':''}
-        <td class="vn">${esc(p.name)}${p.en?`<br><span class="muted mono" style="font-size:10px">${esc(p.en)}</span>`:''}</td>
+        <td class="vn">${esc(p.name)}${p.en?`<br><span class="muted mono" style="font-size:10px">${esc(p.en)}</span>`:''}${tagHtml}</td>
+        <td class="mono">${esc(p.unit||'')||'—'}</td>
         <td class="mono">${p.price?'$'+esc(p.price):'—'}</td>
         <td class="mono">${cnt}</td>
         <td>${p.active===false?'<span class="badge off">停用</span>':'<span class="badge gn">啟用</span>'}</td>
@@ -1150,16 +1192,71 @@ function openProduct(id){ if(!requireWrite('products'))return; editingProduct=id
   const sel=document.getElementById('pm_cat');
   const cats=catList(); const def=(selCat&&cats.includes(selCat))?selCat:(cats[0]||'未分類');
   sel.innerHTML=cats.map(c=>`<option>${esc(c)}</option>`).join('');
+  const uSel=document.getElementById('pm_unit'); uSel.innerHTML='<option value="">（無）</option>'+optList('unit').map(u=>`<option>${esc(u)}</option>`).join('');
   document.getElementById('pm_del').classList.toggle('hide',!id);
   document.getElementById('pmTitle').textContent=id?'編輯產品':'新增產品';
   if(id){ const p=DB.products.find(x=>x.id===id);
-    sel.value=p.category||def; pm_name.value=p.name||''; pm_en.value=p.en||'';
-    pm_price.value=p.price||''; pm_note.value=p.note||''; pm_active.checked=p.active!==false; }
-  else { sel.value=def; pm_name.value='';pm_en.value='';pm_price.value='';pm_note.value=''; pm_active.checked=true; }
+    sel.value=p.category||def; uSel.value=p.unit||''; pm_name.value=p.name||''; pm_en.value=p.en||'';
+    pm_price.value=p.price||''; pm_note.value=p.note||''; pm_active.checked=p.active!==false; pmTags=[...(p.tags||[])]; }
+  else { sel.value=def; uSel.value=''; pm_name.value='';pm_en.value='';pm_price.value='';pm_note.value=''; pm_active.checked=true; pmTags=[]; }
+  renderPmTags();
   pmEnTouched = !!(pm_en.value.trim());   // 已有英文＝視為手動，blur 不覆蓋
   document.getElementById('pm_en_status').textContent='';
   document.getElementById('productModal').classList.add('on');
 }
+/* 產品標籤（編輯視窗內） */
+function renderPmTags(){ const el=document.getElementById('pm_tags'); if(!el) return;
+  const all=allProductTags();
+  el.innerHTML = all.length? all.map(t=>`<span class="chip ${pmTags.includes(t)?'on':''}" onclick="togglePmTag('${jsEsc(t)}')">#${esc(t)}</span>`).join('')
+    : '<span class="muted" style="font-size:12px">尚無標籤，點「＋ 新標籤」建立。</span>'; }
+function togglePmTag(t){ pmTags=pmTags.includes(t)?pmTags.filter(x=>x!==t):pmTags.concat(t); renderPmTags(); }
+async function addTagOption(){ const t=((prompt('新標籤名稱（不用打 #）：')||'').trim()).replace(/^#/,''); if(!t) return;
+  if(cloud && cloudMissingOpts){ alert(optSqlMsg()); return; }
+  if(!optList('tag').includes(t)) await saveOptOrder('tag', optList('tag').concat(t));
+  if(!pmTags.includes(t)) pmTags.push(t); renderPmTags(); }
+
+/* ⚙ 選單設定（類別 / 單位 / 標籤） */
+function optSqlMsg(){ return '尚未建立 app_options 資料表，單位/標籤無法保存。\n請到「設定 / 備份 → 進階」展開建表 SQL 執行後重整。'; }
+function openSettings(){ if(!requireWrite('products'))return; renderSettings(); document.getElementById('settingsModal').classList.add('on'); }
+function curOptList(kind){ return kind==='cat'?catList():optList(kind); }
+function settingsBlock(title, items, kind){
+  let h=`<div class="acat" style="margin-top:14px">${title} <span class="c">${items.length}</span></div>`;
+  if(!items.length) h+='<div class="muted" style="font-size:12px;padding:4px 0">尚無，於下方新增。</div>';
+  items.forEach((name,i)=>{ h+=`<div class="row" style="gap:6px;padding:5px 0;border-bottom:1px solid var(--line)">
+    <span style="flex:1">${kind==='tag'?'#':''}${esc(name)}</span>
+    <button class="btn ghost sm" ${i===0?'disabled':''} onclick="moveOpt('${kind}',${i},-1)">↑</button>
+    <button class="btn ghost sm" ${i===items.length-1?'disabled':''} onclick="moveOpt('${kind}',${i},1)">↓</button>
+    ${kind==='cat'?`<button class="btn ghost sm" title="改名" onclick="renameCategory('${jsEsc(name)}');setTimeout(renderSettings,30)">✎</button>`:''}
+    <button class="x" title="刪除" onclick="removeOpt('${kind}','${jsEsc(name)}')">×</button></div>`; });
+  h+=`<div class="row" style="gap:6px;margin-top:6px"><input id="set_add_${kind}" placeholder="新增${title}…" style="flex:1;border:1.5px solid var(--line2);padding:6px 9px;background:#fff" onkeydown="if(event.key==='Enter')addOpt('${kind}')"><button class="btn sm" onclick="addOpt('${kind}')">＋ 新增</button></div>`;
+  return h; }
+function renderSettings(){ const el=document.getElementById('settingsBody'); if(!el) return;
+  el.innerHTML = settingsBlock('類別 / 大項', catList(), 'cat') + settingsBlock('單位', optList('unit'), 'unit') + settingsBlock('#標籤', optList('tag'), 'tag'); }
+async function addOpt(kind){ const inp=document.getElementById('set_add_'+kind); let name=(inp.value||'').trim(); if(kind==='tag') name=name.replace(/^#/,''); if(!name) return;
+  if(curOptList(kind).includes(name)){ alert('已存在'); return; }
+  if(kind==='cat'){ if(cloud&&cloudMissingCats){alert(catSqlMsg());return;} await saveCatOrder(catList().concat(name)); }
+  else { if(cloud&&cloudMissingOpts){alert(optSqlMsg());return;} await saveOptOrder(kind, optList(kind).concat(name)); }
+  inp.value=''; renderSettings(); renderProducts(); }
+async function removeOpt(kind,name){
+  if(kind==='cat'){ await deleteCategory(name); renderSettings(); return; }
+  if(!confirm('刪除「'+name+'」？')) return;
+  await saveOptOrder(kind, optList(kind).filter(x=>x!==name)); renderSettings(); renderProducts(); }
+async function moveOpt(kind,i,dir){ const arr=curOptList(kind).slice(); const j=i+dir; if(j<0||j>=arr.length) return;
+  const t=arr[i]; arr[i]=arr[j]; arr[j]=t;
+  if(kind==='cat'){ if(cloud&&cloudMissingCats){alert(catSqlMsg());return;} await saveCatOrder(arr); } else await saveOptOrder(kind,arr);
+  renderSettings(); renderProducts(); }
+
+/* 標籤篩選 / 折疊 */
+function renderTagFilter(){ const el=document.getElementById('tagfilter'); if(!el) return;
+  const tags=allProductTags();
+  if(!tags.length){ el.innerHTML=''; return; }
+  el.innerHTML='<span class="muted" style="font-size:12px;margin-right:4px">標籤篩選：</span>'
+    + tags.map(t=>`<span class="chip ${selTag===t?'on':''}" onclick="setTagFilter('${jsEsc(t)}')">#${esc(t)}</span>`).join('')
+    + (selTag?` <span class="linkish" style="font-size:12px" onclick="setTagFilter(null)">清除</span>`:''); }
+function setTagFilter(t){ selTag=(selTag===t)?null:t; renderProducts(); }
+function toggleCat(c){ collapsedCats[c]=!collapsedCats[c]; renderProducts(); }
+function setAllCats(collapse){ const cs=catList().concat('未分類'); cs.forEach(c=>collapsedCats[c]=collapse); renderProducts(); }
+
 async function autoTranslateEn(force){
   const name=(document.getElementById('pm_name').value||'').trim();
   const enEl=document.getElementById('pm_en'); if(!enEl) return;
@@ -1178,7 +1275,8 @@ async function autoTranslateEn(force){
 async function saveProduct(){ if(!requireWrite('products'))return;
   if(cloud && cloudMissingProducts){ alert('雲端尚未建立 products 資料表，現在無法儲存產品。\n請先到 Supabase SQL Editor 執行建表 SQL（見「設定 / 備份」頁），完成後重整再新增。'); return; }
   const o={category:pm_cat.value, name:pm_name.value.trim(), en:pm_en.value.trim(),
-    price:pm_price.value.trim(), note:pm_note.value.trim(), active:pm_active.checked};
+    price:pm_price.value.trim(), note:pm_note.value.trim(), active:pm_active.checked,
+    unit:document.getElementById('pm_unit').value, tags:[...pmTags]};
   if(!o.name){ alert('請輸入品名'); return; }
   const isNew=!editingProduct; let target;
   if(editingProduct){ target=DB.products.find(p=>p.id===editingProduct); Object.assign(target,o); }
