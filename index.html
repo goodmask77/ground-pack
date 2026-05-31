@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GROUN:D 包材採購對應追蹤系統（協作版）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Supabase client (協作用；本機模式不會用到) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --paper:#f4efe5; --paper2:#ece4d6; --card:#fbf8f1; --ink:#1d1a15; --ink2:#5a5247;
+  --line:#d9cfbd; --line2:#c8bca6; --accent:#c4582a; --accent-d:#a4441d;
+  --green:#3f7d4e; --amber:#c98a14; --blue:#3a6ea5; --grey:#9b9384; --purple:#6b4a86;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+  --disp:'Archivo','Noto Sans TC',-apple-system,system-ui,sans-serif;
+  --body:'Noto Sans TC','PingFang TC','Microsoft JhengHei',-apple-system,system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.5}
+body{background-image:radial-gradient(var(--line) 0.5px,transparent 0.5px);background-size:22px 22px}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:13px}
+.wrap{max-width:1280px;margin:0 auto;padding:0 18px 80px}
+header{position:sticky;top:0;z-index:50;background:var(--paper);border-bottom:2px solid var(--ink);
+  background-image:radial-gradient(var(--line) 0.5px,transparent 0.5px);background-size:22px 22px}
+.head-in{max-width:1280px;margin:0 auto;padding:14px 18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.logo{font-family:var(--disp);font-weight:900;font-size:22px;letter-spacing:-.5px;color:var(--ink)}
+.logo b{color:var(--accent)}
+.sub{font-family:var(--mono);font-size:11px;color:var(--ink2);letter-spacing:.5px;text-transform:uppercase}
+#mode{font-family:var(--mono);font-size:11px;font-weight:600;margin-top:3px;display:block}
+.tabs{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
+.tab{background:transparent;border:1.5px solid var(--line2);border-radius:0;padding:8px 14px;font-size:13px;font-weight:600;color:var(--ink2);transition:.12s}
+.tab:hover{border-color:var(--ink);color:var(--ink)}
+.tab.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+h2{font-family:var(--disp);font-weight:900;font-size:18px;letter-spacing:-.3px;margin:26px 0 12px;display:flex;align-items:center;gap:10px}
+h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff;padding:2px 8px;font-weight:600}
+.muted{color:var(--ink2)} .mono{font-family:var(--mono)}
+.btn{border:1.5px solid var(--ink);background:var(--card);padding:7px 13px;font-weight:600;font-size:13px;border-radius:0;transition:.12s}
+.btn:hover{background:var(--ink);color:var(--paper)}
+.btn.acc{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.acc:hover{background:var(--accent-d);border-color:var(--accent-d)}
+.btn.sm{padding:4px 9px;font-size:12px}
+.btn.ghost{border-color:var(--line2);background:transparent;color:var(--ink2)}
+.btn.ghost:hover{border-color:var(--ink);color:var(--ink);background:transparent}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:8px}
+.stat{background:var(--card);border:1.5px solid var(--line2);padding:14px 16px}
+.stat .v{font-family:var(--mono);font-weight:600;font-size:30px;line-height:1;color:var(--ink)}
+.stat .v small{font-size:15px;color:var(--ink2)}
+.stat .l{font-size:12px;color:var(--ink2);margin-top:6px}
+.bar{height:8px;background:var(--paper2);border:1px solid var(--line2);margin-top:8px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--green)}
+.ghead{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:2px solid var(--ink);margin-top:18px}
+.ghead .gt{font-family:var(--disp);font-weight:700;font-size:15px}
+.ghead .gc{font-family:var(--mono);font-size:11px;color:var(--ink2)}
+.item{background:var(--card);border:1.5px solid var(--line2);margin-top:8px}
+.item.chosen{border-left:5px solid var(--green)}
+.irow{display:flex;align-items:center;gap:12px;padding:11px 14px;cursor:pointer}
+.irow:hover{background:var(--paper2)}
+.iexp{font-family:var(--mono);color:var(--ink2);width:14px;flex:none;transition:.15s}
+.item.open .iexp{transform:rotate(90deg)}
+.iname{font-weight:700;font-size:14px}
+.ispec{font-family:var(--mono);font-size:11px;color:var(--ink2);background:var(--paper2);padding:1px 6px;border:1px solid var(--line)}
+.itype{font-size:11px;color:#fff;background:var(--ink2);padding:1px 7px;font-weight:600}
+.imeta{margin-left:auto;display:flex;gap:8px;align-items:center;font-size:12px}
+.pill{font-family:var(--mono);font-size:11px;font-weight:600;padding:2px 8px;border:1px solid}
+.pill.todo{color:var(--grey);border-color:var(--grey)}
+.pill.prog{color:var(--amber);border-color:var(--amber)}
+.pill.done{color:var(--green);border-color:var(--green);background:#eef5ef}
+.chosen-tag{font-family:var(--mono);font-size:11px;color:var(--green);font-weight:600}
+.idet{padding:0 14px 14px;border-top:1px dashed var(--line2);display:none}
+.item.open .idet{display:block}
+.idet .sec{margin-top:12px}
+.idet .seclab{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink2);margin-bottom:6px}
+.qtab{width:100%;border-collapse:collapse;font-size:13px}
+.qtab th{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink2);text-align:left;padding:5px 7px;border-bottom:1.5px solid var(--line2);font-weight:600}
+.qtab td{padding:4px 7px;border-bottom:1px solid var(--line);vertical-align:middle}
+.qtab tr.chz{background:#eef5ef}
+.qtab input,.qtab select{width:100%;border:1px solid var(--line2);background:#fff;padding:4px 6px;border-radius:0}
+.qtab input:focus,.qtab select:focus{outline:none;border-color:var(--accent)}
+.qtab .vn{font-weight:700;white-space:nowrap}
+.qtab .vn small{display:block;font-family:var(--mono);font-weight:400;font-size:10px;color:var(--ink2)}
+.sug{font-family:var(--mono);font-size:9px;background:var(--accent);color:#fff;padding:1px 4px;margin-left:5px;vertical-align:middle}
+.x{border:none;background:none;color:var(--grey);font-size:16px;line-height:1;padding:2px 6px}
+.x:hover{color:var(--accent)}
+.starbtn{border:none;background:none;font-size:17px;line-height:1;color:var(--line2);padding:0 4px}
+.starbtn.on{color:var(--green)}
+.addv{margin-top:8px}
+.addv select{border:1.5px solid var(--ink);padding:6px 10px;background:#fff}
+.vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px;margin-top:10px}
+.vcard{background:var(--card);border:1.5px solid var(--line2);padding:14px;position:relative}
+.vcard h3{font-family:var(--disp);font-size:16px;font-weight:700;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.vcard .en{font-family:var(--mono);font-size:11px;color:var(--ink2);font-weight:400}
+.vcard .reg{font-size:11px;color:var(--ink2);margin-top:2px}
+.vcard a{color:var(--accent);font-size:12px;word-break:break-all;font-family:var(--mono)}
+.tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:9px}
+.t{font-size:10px;border:1px solid var(--line2);padding:1px 6px;color:var(--ink2)}
+.t.cap{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.vcat{display:flex;flex-wrap:wrap;gap:4px;margin-top:9px}
+.vc{font-size:10px;background:var(--paper2);border:1px solid var(--line);padding:1px 6px}
+.vnote{font-size:12px;color:var(--ink2);margin-top:9px;line-height:1.4}
+.vacts{display:flex;gap:6px;margin-top:11px}
+.ov{position:fixed;inset:0;background:rgba(29,26,21,.55);z-index:100;display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
+.ov.on{display:flex}
+.modal{background:var(--paper);border:2px solid var(--ink);width:100%;max-width:520px;padding:22px}
+.modal h3{font-family:var(--disp);font-weight:900;font-size:18px;margin-bottom:14px}
+.fld{margin-bottom:11px}
+.fld label{display:block;font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink2);margin-bottom:4px}
+.fld input,.fld select,.fld textarea{width:100%;border:1.5px solid var(--line2);background:#fff;padding:8px 10px;border-radius:0}
+.fld input:focus,.fld select:focus,.fld textarea:focus{outline:none;border-color:var(--accent)}
+.fld textarea{min-height:62px;resize:vertical}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12px;border:1.5px solid var(--line2);padding:4px 10px;user-select:none}
+.chip.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.modacts{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+.note{font-size:12px;color:var(--ink2);background:var(--paper2);border:1px solid var(--line2);padding:10px 12px;margin-top:6px}
+.note b{color:var(--accent)}
+.hide{display:none!important}
+.foot{margin-top:30px;font-size:11px;color:var(--ink2);font-family:var(--mono);text-align:center;border-top:1px solid var(--line2);padding-top:14px}
+@media(max-width:640px){.imeta{margin-left:0;width:100%;padding-left:26px}.irow{flex-wrap:wrap}}
+</style>
+</head>
+<body>
+<header>
+  <div class="head-in">
+    <div>
+      <div class="logo">GROUN<b>:</b>D</div>
+      <div class="sub">Packaging Sourcing &amp; Matching Tracker</div>
+      <span id="mode">● …</span>
+    </div>
+    <div class="tabs">
+      <button class="tab on" data-tab="dash">總覽</button>
+      <button class="tab" data-tab="items">需求 × 廠商對應</button>
+      <button class="tab" data-tab="vendors">廠商</button>
+      <button class="tab" data-tab="data">設定 / 備份</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <section id="dash">
+    <div id="storewarn" class="note hide"></div>
+    <div class="stats" id="statgrid"></div>
+    <h2><span class="n">進度</span>各群組採購狀態</h2>
+    <div id="groupprog"></div>
+  </section>
+
+  <section id="items" class="hide">
+    <h2 style="margin-top:18px"><span class="n">需求</span>包材 / 耗材對應追蹤
+      <button class="btn acc sm" style="margin-left:auto" onclick="openItem()">＋ 新增品項</button></h2>
+    <div class="note">點品項展開 → 系統依「適配類型」建議廠商（標 <span class="sug">建議</span>）。逐家填詢價狀態 / 單價 / MOQ / 交期，按 ★ 標記選定廠商。所有欄位即時同步給協作者。</div>
+    <div id="itemlist"></div>
+  </section>
+
+  <section id="vendors" class="hide">
+    <h2 style="margin-top:18px"><span class="n">廠商</span>包材供應商
+      <button class="btn acc sm" style="margin-left:auto" onclick="openVendor()">＋ 新增廠商</button></h2>
+    <div id="vendorgrid" class="vgrid"></div>
+  </section>
+
+  <section id="data" class="hide">
+    <h2 style="margin-top:18px"><span class="n">雲端</span>連線狀態</h2>
+    <div id="cloudstatus" class="note"></div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn acc" onclick="seedCloud()">⤓ 匯入預設 14 廠商 ＋ 包材清單</button>
+      <button class="btn" id="refreshbtn" onclick="manualRefresh()">↻ 重新整理</button>
+    </div>
+
+    <h2><span class="n">備份</span>備份與匯出</h2>
+    <div class="note">雲端模式下，資料存在你的 Supabase；仍建議定期下載 JSON 留底。CSV 可在 Excel / Google Sheet 開啟。</div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn" onclick="exportJSON()">⬇ 下載 JSON 備份</button>
+      <button class="btn" onclick="document.getElementById('imp').click()">⬆ 匯入 JSON（寫入雲端）</button>
+      <input type="file" id="imp" accept="application/json" class="hide" onchange="importJSON(event)">
+      <button class="btn" onclick="exportCSV()">⬇ 匯出對應表 CSV</button>
+      <button class="btn ghost" onclick="resetAll()">↺ 清空並重置為預設</button>
+    </div>
+
+    <h2><span class="n">說明</span>適配類型對照</h2>
+    <div id="legendcat" class="note" style="line-height:1.9"></div>
+  </section>
+
+  <div class="foot">GROUN:D · 口香糖俱樂部股份有限公司 · 包材採購對應追蹤（協作版）</div>
+</div>
+
+<!-- ITEM MODAL -->
+<div class="ov" id="itemModal"><div class="modal">
+  <h3 id="imTitle">新增品項</h3>
+  <div class="fld"><label>品項名稱</label><input id="im_name" placeholder="例：六角碗"></div>
+  <div class="row" style="gap:11px">
+    <div class="fld" style="flex:1"><label>群組</label><select id="im_group"></select></div>
+    <div class="fld" style="flex:1"><label>適配類型（決定建議廠商）</label><select id="im_type"></select></div>
+  </div>
+  <div class="row" style="gap:11px">
+    <div class="fld" style="flex:1"><label>規格 / cm</label><input id="im_spec" placeholder="24*5.5 / 1000ml"></div>
+    <div class="fld" style="flex:1"><label>對應產品</label><input id="im_prod" placeholder="沙拉、碗"></div>
+  </div>
+  <div class="fld"><label>備註</label><textarea id="im_note"></textarea></div>
+  <div class="modacts">
+    <button class="btn ghost" id="im_del" onclick="delItem()">刪除</button>
+    <button class="btn ghost" onclick="closeModal('itemModal')">取消</button>
+    <button class="btn acc" onclick="saveItem()">儲存</button>
+  </div>
+</div></div>
+
+<!-- VENDOR MODAL -->
+<div class="ov" id="vendorModal"><div class="modal">
+  <h3 id="vmTitle">新增廠商</h3>
+  <div class="row" style="gap:11px">
+    <div class="fld" style="flex:2"><label>名稱</label><input id="vm_name" placeholder="例：禾啟股份有限公司"></div>
+    <div class="fld" style="flex:1"><label>英文 / 品牌</label><input id="vm_en"></div>
+  </div>
+  <div class="row" style="gap:11px">
+    <div class="fld" style="flex:1"><label>地區</label><input id="vm_reg" placeholder="台中"></div>
+    <div class="fld" style="flex:2"><label>網站</label><input id="vm_url" placeholder="https://"></div>
+  </div>
+  <div class="fld"><label>供應類別（勾選 → 對應到建議的需求品項）</label><div class="chips" id="vm_cats"></div></div>
+  <div class="fld"><label>特性標籤（逗號分隔，例：客製印刷,免費寄倉,可線上訂購）</label><input id="vm_tags"></div>
+  <div class="fld"><label>備註</label><textarea id="vm_note"></textarea></div>
+  <div class="modacts">
+    <button class="btn ghost" id="vm_del" onclick="delVendor()">刪除</button>
+    <button class="btn ghost" onclick="closeModal('vendorModal')">取消</button>
+    <button class="btn acc" onclick="saveVendor()">儲存</button>
+  </div>
+</div></div>
+
+<script>
+/* ===================================================================
+   ▼▼▼  雲端設定：填入後即成為「公開＋協作」模式（部署前填寫）  ▼▼▼
+   1. 到 supabase.com 開免費專案，於 SQL Editor 執行說明檔的建表 SQL
+   2. Project Settings → API 複製 Project URL 與 anon public key 貼到下面
+   留空 = 本機模式（資料只存在本機瀏覽器，不協作）
+=================================================================== */
+const SUPABASE_URL = 'https://enaygnahypbfvhznitmj.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVuYXlnbmFoeXBiZnZoem5pdG1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNTA0NjQsImV4cCI6MjA5NTYyNjQ2NH0.7tlsAvUllEbwbbSePXEB6n0UUz-2UEbLBTyizhOug88';
+const PASSCODE = '';            // 選填：設一組存取密碼當作輕量門禁（如 'ground2026'），留空=不設
+/* =================================================================== */
+
+const CAT = {
+  burgerpaper:'漢堡紙 / 防油紙', box:'餐盒（炸物/早午餐）', pizzabox:'比薩盒',
+  cupholder:'杯架', bowl:'碗（沙拉/六角碗）', saucecup:'醬料杯',
+  hotcup:'熱飲杯 / 湯杯', coldcup:'冷飲杯', lid:'杯蓋 / 碗蓋',
+  bag:'紙袋 / 提袋', cutlery:'餐具 / 吸管 / 手套', cleaning:'清潔用品',
+  sauce:'醬料包 / 調味料', sticker:'貼紙 / 印刷', other:'其他'
+};
+const CATKEYS = Object.keys(CAT);
+const GROUPS = ['單品包材','包裝袋','醬料包','餐具','清潔','防護'];
+const STATUS = ['未詢價','詢價中','已報價','打樣中','已選定','已下單','不適用'];
+const STATUS_CLASS = {未詢價:'todo',不適用:'todo',詢價中:'prog',已報價:'prog',打樣中:'prog',已選定:'done',已下單:'done'};
+
+const SEED_VENDORS = [
+  {id:'v1', name:'禾啟股份有限公司', en:'HJHJ', reg:'', url:'https://www.hjhj.com.tw/',
+   cats:['burgerpaper','box','pizzabox','cupholder','bowl','saucecup','hotcup','lid','bag','cutlery','sticker'],
+   tags:['全品項耗材','紙袋客製','植纖容器'], note:'餐飲耗材全品項：牛皮紙杯/杯蓋/杯套/L型袋、開窗餐盒、植纖碗、塑膠醬料杯、免洗餐具。品項最齊，可當主力一站式比較對象。'},
+  {id:'v2', name:'晉兆生化科技（發笑杯 Jolly Cup）', en:'Jolly Cup', reg:'', url:'http://www.papercup.com.tw/',
+   cats:['hotcup','lid'], tags:['紙杯專家','耐高溫140-160℃','SGS'], note:'熱飲紙杯專家，雙面淋膜耐高溫，外銷取向。熱飲杯/湯杯品質強，但品項較專一。'},
+  {id:'v3', name:'統奕包裝（PPI）', en:'President Packaging', reg:'', url:'https://www.ppi.com.tw/',
+   cats:['hotcup','coldcup','lid'], tags:['大廠','環保可堆肥','雙層杯','連鎖適用'], note:'台灣最大紙容器廠之一，環保紙杯/可堆肥/雙層杯。規模大、適合連鎖長期供應，留意起訂量。'},
+  {id:'v4', name:'sc-go（待確認）', en:'', reg:'', url:'https://sc-go.com.tw/',
+   cats:[], tags:['待確認'], note:'網站擋爬蟲、未能自動辨識品項範圍。請補上你已知的產品類別與聯絡資訊。'},
+  {id:'v5', name:'立墩股份有限公司', en:'VIGOURPACK', reg:'', url:'http://www.vigourpack.com/zh-TW/index/',
+   cats:['box','cupholder','bowl','saucecup','hotcup','coldcup','lid','bag','cutlery'],
+   tags:['一站式','紙+塑膠','PET/PLA杯'], note:'冷熱飲杯/雙層杯/PET/PLA、食品容器、外帶餐盒/碗、紙袋、杯套、杯架、餐具全包。一站式採購首選之一。'},
+  {id:'v6', name:'台灣無塑包裝', en:'GreenFuture', reg:'台中', url:'https://greenfuture.tw/index.php',
+   cats:['box','bowl','hotcup','lid'], tags:['無塑環保','可線上訂購','植纖'], note:'牛皮/植纖餐盒、六角/八角餐盒、植纖沙拉碗、湯碗、環保紙杯。有線上訂購，適合小量起單與六角碗/沙拉碗。'},
+  {id:'v7', name:'皇冠特殊印刷廠', en:'HG Cups', reg:'台中', url:'https://www.hg-cups.com/zh-tw',
+   cats:['hotcup','coldcup','bowl','box','lid'], tags:['台灣最大紙杯廠','冰淇淋杯+蓋','LINE@'], note:'冷熱/冷熱共用杯、單雙層杯，並有冰淇淋杯+蓋、單/多格餐盒。冰淇淋品項對應佳。'},
+  {id:'v8', name:'禾益佳', en:'Easypack', reg:'', url:'https://easypacktw.com/zh-hant/',
+   cats:['box','bowl','cutlery','lid'], tags:['ISO22000','連鎖','客製印刷','可索樣'], note:'牛皮/植纖甘蔗渣/塑膠外帶容器、碗、壽司盒。服務連鎖、OEM客製印刷、可詢價索樣。'},
+  {id:'v9', name:'來客亨紙袋工廠', en:'Lucky Hand', reg:'', url:'https://www.luckyhand.com.tw/',
+   cats:['burgerpaper','bag','pizzabox','box','hotcup','lid'], tags:['紙袋工廠','L型漢堡紙','速食/連鎖專業'], note:'防油紙袋、L型漢堡紙袋、手提紙袋、紙盒、紙杯。專做速食/連鎖。漢堡紙與各式紙袋強匹配。'},
+  {id:'v10',name:'台灣淋膜工業（HCG 和玖國際）', en:'HCG', reg:'彰化', url:'https://www.hcg888.com.tw/index.aspx',
+   cats:['hotcup','coldcup','bowl','box','lid'], tags:['ISO9001/22000/HACCP','淋膜','紙漿模塑'], note:'淋膜紙杯、紙碗、紙盒、紙漿模塑(甘蔗渣)、漢堡盒。認證齊全。'},
+  {id:'v11',name:'鉅眾工業（JumboPack）', en:'Jumbo Pack', reg:'台中', url:'https://www.jumbopack.com.tw/zh/index.html',
+   cats:['hotcup','coldcup','bowl','box','pizzabox','lid','cutlery','saucecup','bag','sticker'],
+   tags:['全品項','私版印刷','免費寄倉6個月'], note:'紙杯/碗/餐盒/植纖/杯蓋/吸管/餐具/漢堡盒/美式餐盒。私版印刷＋6個月免費寄倉，對連鎖備貨很有利。'},
+  {id:'v12',name:'奎達實業（Quantas）', en:'Quantas', reg:'', url:'https://www.quantas.com.tw/zh-TW',
+   cats:['hotcup','coldcup','box','bowl','bag','cutlery','lid','cupholder','sticker'],
+   tags:['一站式','炸雞桶/冰淇淋杯','客製造型杯','網路商店'], note:'咖啡杯/杯套/湯杯/冰淇淋杯/餐盒/炸雞桶/爆米花杯/透明容器/外帶紙袋。品牌客製強，炸雞與冰淇淋對應佳。'},
+  {id:'v13',name:'意豐興業', en:'Yi Feng', reg:'', url:'https://yifeng-pack.com/',
+   cats:['box','saucecup','bowl','lid'], tags:['塑膠PP/PET/PS/OPS','連體醬料杯','防漏盒','微波餐盒'],
+   note:'塑膠及紙製食品盒、自扣/四扣餐盒、微波餐盒、連體醬料杯、防漏外帶盒。透明盒/醬料盅匹配佳。'},
+  {id:'v14',name:'力可企業', en:'Likerware', reg:'新竹竹北', url:'https://www.likerware.com.tw/tw',
+   cats:['cutlery','cleaning','sauce','bag','box','sticker'],
+   tags:['一站式整合批發','調味料','清潔用品','桃竹配送','私版印刷'],
+   note:'免洗餐具/竹筷/吸管、調味料、清潔用品(衛生紙)、防油紙袋、透明盒。餐具/清潔/醬料包/雜項耗材的整合批發首選。桃園新竹有配送。'}
+];
+
+const SEED_ITEMS = [
+  ['單品包材','漢堡紙','burgerpaper','13*7.5*9','漢堡、貝果、炸雞','方底袋'],
+  ['單品包材','炸物盒','box','13.7*7.5*5.6','薯條、三明治','板燒盒'],
+  ['單品包材','早午餐盒','box','23.5*15.5*5','早午餐、麵',''],
+  ['單品包材','早午餐盒蓋','lid','23.5','早午餐、麵',''],
+  ['單品包材','兩杯杯架','cupholder','10.5*21.5','飲品',''],
+  ['單品包材','四杯杯架','cupholder','19.5*22','飲品',''],
+  ['單品包材','六角碗','bowl','24*5.5','沙拉、碗','1000ml'],
+  ['單品包材','六角碗蓋','lid','24','沙拉、碗',''],
+  ['單品包材','醬料盅','saucecup','4.5底7.5口4.7高','沙拉、碗',''],
+  ['單品包材','醬料盅蓋','lid','7.5','沙拉、碗',''],
+  ['單品包材','比薩盒','pizzabox','30*30*4','比薩',''],
+  ['單品包材','熱飲杯','hotcup','6.1底9口9.3高','熱飲','350ml'],
+  ['單品包材','湯杯','hotcup','6.1底9口9.3高','湯','350ml'],
+  ['單品包材','熱杯蓋','lid','9','熱飲、湯',''],
+  ['單品包材','冷飲中杯','coldcup','6.2底9.8口12.1高','冷飲','500ml'],
+  ['單品包材','冷飲大杯','coldcup','6底9.8口14.2高','冷飲','600ml'],
+  ['單品包材','冷杯蓋','lid','9.8','冷飲',''],
+  ['包裝袋','小紙袋','bag','15*7.7*28','速食、單杯飲品','6號方型袋'],
+  ['包裝袋','中紙袋','bag','22*12*30','兩杯杯架、速食','12號方型袋(牛皮短)'],
+  ['包裝袋','大紙袋','bag','26*17*30','早午餐、速食',''],
+  ['包裝袋','特大提袋','bag','','全品項包裝加購',''],
+  ['醬料包','番茄醬','sauce','','','憶霖'],
+  ['醬料包','糖包','sauce','','','憶霖'],
+  ['醬料包','胡椒鹽包','sauce','','','憶霖'],
+  ['醬料包','辣椒','sauce','','','憶霖'],
+  ['醬料包','楓糖','sauce','','','憶霖'],
+  ['醬料包','奶油','sauce','','','憶霖'],
+  ['醬料包','奶精','sauce','','','憶霖'],
+  ['餐具','塑膠刀','cutlery','16','早午餐','玉米澱粉可降解'],
+  ['餐具','塑膠叉','cutlery','16','早午餐、碗、沙拉','玉米澱粉可降解'],
+  ['餐具','塑膠湯匙','cutlery','16','飲品、湯品、早午餐、碗','玉米澱粉可降解'],
+  ['餐具','吸管','cutlery','21','飲品',''],
+  ['餐具','飲料攪拌匙','cutlery','','飲品',''],
+  ['餐具','一次性手套','cutlery','','速食、比薩',''],
+  ['清潔','紙巾','cleaning','','',''],
+  ['清潔','濕紙巾','cleaning','','',''],
+  ['清潔','酒精棉片','cleaning','','',''],
+  ['防護','透明膠帶','other','','',''],
+  ['防護','LOGO貼紙','sticker','','','客製印刷']
+].map((r,i)=>({id:'i'+(i+1),group:r[0],name:r[1],type:r[2],spec:r[3],prod:r[4],note:r[5],sort:i}));
+
+/* ============ 狀態 ============ */
+let cloud=false, sb=null, DB={vendors:[],items:[],matches:{}};
+let openItems={}, editingItem=null, editingVendor=null, vmCats=[];
+const KEY='ground_pack_v1';
+
+/* ============ 本機儲存（fallback） ============ */
+async function persist(){ if(cloud) return;
+  const raw=JSON.stringify(DB);
+  try{ await window.storage.set(KEY,raw); }
+  catch(e){ try{ localStorage.setItem(KEY,raw);}catch(_){} } }
+async function loadLocal(){ let raw=null;
+  try{ const r=await window.storage.get(KEY); if(r&&r.value) raw=r.value; }
+  catch(e){ try{ raw=localStorage.getItem(KEY);}catch(_){} }
+  if(raw){ try{ DB=JSON.parse(raw);}catch(e){ seedLocal(); } } else seedLocal();
+  if(!DB.vendors)DB.vendors=[]; if(!DB.items)DB.items=[]; if(!DB.matches)DB.matches={}; }
+function seedLocal(){ DB={vendors:JSON.parse(JSON.stringify(SEED_VENDORS)),
+  items:JSON.parse(JSON.stringify(SEED_ITEMS)), matches:{}}; }
+
+/* ============ 雲端層 ============ */
+async function cloudLoad(){
+  const [vr,ir,mr]=await Promise.all([
+    sb.from('vendors').select('*').order('sort'),
+    sb.from('items').select('*').order('sort'),
+    sb.from('matches').select('*')
+  ]);
+  if(vr.error||ir.error||mr.error) throw (vr.error||ir.error||mr.error);
+  DB.vendors=(vr.data||[]).map(r=>({id:r.id,name:r.name,en:r.en,reg:r.reg,url:r.url,cats:r.cats||[],tags:r.tags||[],note:r.note,sort:r.sort}));
+  DB.items=(ir.data||[]).map(r=>({id:r.id,group:r.grp,name:r.name,type:r.type,spec:r.spec,prod:r.prod,note:r.note,sort:r.sort}));
+  DB.matches={};
+  (mr.data||[]).forEach(r=>{ (DB.matches[r.item_id]=DB.matches[r.item_id]||[]).push(
+    {vendorId:r.vendor_id,status:r.status,price:r.price,moq:r.moq,lead:r.lead,note:r.note,chosen:r.chosen}); });
+}
+async function upVendor(v){ if(!cloud) return persist();
+  await sb.from('vendors').upsert({id:v.id,name:v.name,en:v.en,reg:v.reg,url:v.url,cats:v.cats,tags:v.tags,note:v.note,sort:v.sort||0}); }
+async function delVendorCloud(id){ if(!cloud) return persist(); await sb.from('vendors').delete().eq('id',id); }
+async function upItem(it){ if(!cloud) return persist();
+  await sb.from('items').upsert({id:it.id,grp:it.group,name:it.name,type:it.type,spec:it.spec,prod:it.prod,note:it.note,sort:it.sort||0}); }
+async function delItemCloud(id){ if(!cloud) return persist(); await sb.from('items').delete().eq('id',id); }
+async function upMatch(iid,m){ if(!cloud) return persist();
+  await sb.from('matches').upsert({item_id:iid,vendor_id:m.vendorId,status:m.status,price:m.price,moq:m.moq,lead:m.lead,note:m.note,chosen:!!m.chosen}); }
+async function delMatchCloud(iid,vid){ if(!cloud) return persist(); await sb.from('matches').delete().eq('item_id',iid).eq('vendor_id',vid); }
+
+async function seedCloud(){
+  if(!cloud){ seedLocal(); await persist(); renderAll(); alert('（本機模式）已載入預設資料'); return; }
+  if(!confirm('將預設的 14 家廠商與包材清單寫入雲端（相同 id 會被覆蓋）。繼續？')) return;
+  await sb.from('vendors').upsert(SEED_VENDORS.map((v,i)=>({id:v.id,name:v.name,en:v.en,reg:v.reg,url:v.url,cats:v.cats,tags:v.tags,note:v.note,sort:i})));
+  await sb.from('items').upsert(SEED_ITEMS.map((it,i)=>({id:it.id,grp:it.group,name:it.name,type:it.type,spec:it.spec,prod:it.prod,note:it.note,sort:i})));
+  await cloudLoad(); renderAll(); alert('已匯入預設資料到雲端');
+}
+async function pushAllToCloud(){
+  await sb.from('vendors').upsert(DB.vendors.map((v,i)=>({id:v.id,name:v.name,en:v.en,reg:v.reg,url:v.url,cats:v.cats||[],tags:v.tags||[],note:v.note,sort:v.sort??i})));
+  await sb.from('items').upsert(DB.items.map((it,i)=>({id:it.id,grp:it.group,name:it.name,type:it.type,spec:it.spec,prod:it.prod,note:it.note,sort:it.sort??i})));
+  const rows=[]; Object.keys(DB.matches).forEach(iid=>(DB.matches[iid]||[]).forEach(m=>
+    rows.push({item_id:iid,vendor_id:m.vendorId,status:m.status,price:m.price,moq:m.moq,lead:m.lead,note:m.note,chosen:!!m.chosen})));
+  if(rows.length) await sb.from('matches').upsert(rows);
+}
+async function wipeCloud(){
+  await sb.from('matches').delete().neq('item_id','');
+  await sb.from('items').delete().neq('id','');
+  await sb.from('vendors').delete().neq('id','');
+}
+let rtTimer; function refetchSoon(){ if(!cloud) return; clearTimeout(rtTimer);
+  rtTimer=setTimeout(async()=>{ try{ await cloudLoad(); renderAll(); }catch(e){} },500); }
+function subscribe(){ if(!cloud) return;
+  sb.channel('rt')
+    .on('postgres_changes',{event:'*',schema:'public',table:'vendors'},refetchSoon)
+    .on('postgres_changes',{event:'*',schema:'public',table:'items'},refetchSoon)
+    .on('postgres_changes',{event:'*',schema:'public',table:'matches'},refetchSoon)
+    .subscribe();
+}
+async function manualRefresh(){ if(cloud){ try{ await cloudLoad(); renderAll(); }catch(e){ alert('重新整理失敗'); } } else { await loadLocal(); renderAll(); } }
+
+/* ============ 對應/建議 ============ */
+function suggestedVendors(item){ return DB.vendors.filter(v=>(v.cats||[]).includes(item.type)); }
+function matchesFor(id){ return DB.matches[id]||[]; }
+function itemStatus(item){ const ms=matchesFor(item.id);
+  if(ms.some(m=>m.chosen)) return '已選定';
+  if(ms.some(m=>m.status==='已下單')) return '已下單';
+  if(ms.some(m=>['詢價中','已報價','打樣中'].includes(m.status))) return '詢價中';
+  return '未詢價'; }
+
+/* ============ 渲染 ============ */
+function renderDash(){
+  const items=DB.items, total=items.length;
+  const chosen=items.filter(i=>matchesFor(i.id).some(m=>m.chosen)).length;
+  const prog=items.filter(i=>itemStatus(i)==='詢價中').length;
+  const ordered=items.filter(i=>matchesFor(i.id).some(m=>m.status==='已下單')).length;
+  const pct=total?Math.round(chosen/total*100):0;
+  document.getElementById('statgrid').innerHTML=`
+    <div class="stat"><div class="v">${total}</div><div class="l">需求品項總數</div></div>
+    <div class="stat"><div class="v">${chosen}<small> /${total}</small></div><div class="l">已選定廠商</div>
+      <div class="bar"><i style="width:${pct}%"></i></div></div>
+    <div class="stat"><div class="v">${prog}</div><div class="l">詢價/報價進行中</div></div>
+    <div class="stat"><div class="v">${ordered}</div><div class="l">已下單</div></div>
+    <div class="stat"><div class="v">${DB.vendors.length}</div><div class="l">廠商數</div></div>`;
+  let html='';
+  GROUPS.concat([...new Set(items.map(i=>i.group))].filter(g=>!GROUPS.includes(g))).forEach(g=>{
+    const gi=items.filter(i=>i.group===g); if(!gi.length) return;
+    const gc=gi.filter(i=>matchesFor(i.id).some(m=>m.chosen)).length;
+    const p=gi.length?Math.round(gc/gi.length*100):0;
+    html+=`<div class="item" style="cursor:default"><div class="irow" style="cursor:default">
+      <span class="iname">${g}</span>
+      <span class="imeta"><span class="mono muted">${gc}/${gi.length} 已選定</span>
+      <span class="pill ${p===100?'done':p>0?'prog':'todo'}">${p}%</span></span></div>
+      <div style="padding:0 14px 12px"><div class="bar"><i style="width:${p}%"></i></div></div></div>`;
+  });
+  document.getElementById('groupprog').innerHTML=html;
+}
+function renderItems(){
+  const items=DB.items; let html='';
+  GROUPS.concat([...new Set(items.map(i=>i.group))].filter(g=>!GROUPS.includes(g))).forEach(g=>{
+    const gi=items.filter(i=>i.group===g); if(!gi.length) return;
+    html+=`<div class="ghead"><span class="gt">${g}</span><span class="gc">${gi.length} 項</span></div>`;
+    gi.forEach(it=>{ html+=itemHTML(it); });
+  });
+  document.getElementById('itemlist').innerHTML=html||'<div class="note">尚無品項，點右上「新增品項」。</div>';
+}
+function itemHTML(it){
+  const st=itemStatus(it), ms=matchesFor(it.id);
+  const chosen=ms.find(m=>m.chosen);
+  const chV=chosen?DB.vendors.find(v=>v.id===chosen.vendorId):null;
+  const open=openItems[it.id];
+  return `<div class="item ${chosen?'chosen':''} ${open?'open':''}" id="item-${it.id}">
+    <div class="irow" onclick="toggleItem('${it.id}')">
+      <span class="iexp">▶</span>
+      <span class="iname">${esc(it.name)}</span>
+      ${it.spec?`<span class="ispec">${esc(it.spec)}</span>`:''}
+      <span class="itype">${CAT[it.type]||it.type}</span>
+      <span class="imeta">
+        ${chV?`<span class="chosen-tag">★ ${esc(chV.en||chV.name)}${chosen.price?' · $'+esc(chosen.price):''}</span>`:''}
+        <span class="pill ${STATUS_CLASS[st]}">${st}</span>
+        <button class="btn ghost sm" onclick="event.stopPropagation();openItem('${it.id}')">編輯</button>
+      </span>
+    </div>
+    <div class="idet">
+      ${(it.prod||it.note)?`<div class="muted" style="margin-top:10px;font-size:12px">
+        ${it.prod?'對應產品：'+esc(it.prod):''} ${it.note?' ｜ 備註：'+esc(it.note):''}</div>`:''}
+      <div class="sec"><div class="seclab">廠商詢價對應</div>${quoteTable(it)}</div>
+    </div></div>`;
+}
+function quoteTable(it){
+  const ms=matchesFor(it.id);
+  const sug=suggestedVendors(it).map(v=>v.id);
+  const rows=[...ms]; const present=new Set(ms.map(m=>m.vendorId));
+  sug.forEach(vid=>{ if(!present.has(vid)) rows.push({vendorId:vid,status:'未詢價',price:'',moq:'',lead:'',note:'',chosen:false,_sug:true}); });
+  if(!rows.length) return '<div class="muted" style="font-size:12px">此類型暫無建議廠商，可從下方下拉手動加入。</div>'+addVendorRow(it);
+  let h='<table class="qtab"><thead><tr><th>選定</th><th>廠商</th><th>狀態</th><th>單價</th><th>規格/MOQ</th><th>交期</th><th>備註</th><th></th></tr></thead><tbody>';
+  rows.forEach(m=>{ const v=DB.vendors.find(x=>x.id===m.vendorId); if(!v) return;
+    const isSug=sug.includes(v.id);
+    h+=`<tr class="${m.chosen?'chz':''}">
+      <td><button class="starbtn ${m.chosen?'on':''}" title="標記選定" onclick="setChosen('${it.id}','${v.id}')">★</button></td>
+      <td class="vn">${esc(v.en||v.name)}${isSug?'<span class="sug">建議</span>':''}<small>${esc(v.name)}</small></td>
+      <td><select onchange="upd('${it.id}','${v.id}','status',this.value)">${STATUS.map(s=>`<option ${m.status===s?'selected':''}>${s}</option>`).join('')}</select></td>
+      <td><input value="${esc(m.price||'')}" placeholder="$/個" onchange="upd('${it.id}','${v.id}','price',this.value)"></td>
+      <td><input value="${esc(m.moq||'')}" placeholder="起訂/箱入" onchange="upd('${it.id}','${v.id}','moq',this.value)"></td>
+      <td><input value="${esc(m.lead||'')}" placeholder="天" onchange="upd('${it.id}','${v.id}','lead',this.value)"></td>
+      <td><input value="${esc(m.note||'')}" onchange="upd('${it.id}','${v.id}','note',this.value)"></td>
+      <td><button class="x" title="移除" onclick="rmMatch('${it.id}','${v.id}')">×</button></td></tr>`;
+  });
+  h+='</tbody></table>'+addVendorRow(it);
+  return h;
+}
+function addVendorRow(it){
+  const used=new Set(matchesFor(it.id).map(m=>m.vendorId).concat(suggestedVendors(it).map(v=>v.id)));
+  const opts=DB.vendors.filter(v=>!used.has(v.id));
+  return `<div class="addv"><select onchange="if(this.value){addMatch('${it.id}',this.value);this.value=''}">
+    <option value="">＋ 手動加入其他廠商…</option>
+    ${opts.map(v=>`<option value="${v.id}">${esc(v.en||v.name)} — ${esc(v.name)}</option>`).join('')}
+    </select></div>`;
+}
+function renderVendors(){
+  let h='';
+  DB.vendors.forEach(v=>{
+    const covered=DB.items.filter(i=>(v.cats||[]).includes(i.type)).length;
+    h+=`<div class="vcard">
+      <h3>${esc(v.name)} ${v.en?`<span class="en">${esc(v.en)}</span>`:''}</h3>
+      ${v.reg?`<div class="reg">📍 ${esc(v.reg)}</div>`:''}
+      ${v.url?`<a href="${esc(v.url)}" target="_blank" rel="noopener">${esc(v.url)}</a>`:''}
+      <div class="tags">${(v.tags||[]).map(t=>`<span class="t">${esc(t)}</span>`).join('')}
+        <span class="t cap">可對應 ${covered} 項需求</span></div>
+      <div class="vcat">${(v.cats||[]).map(c=>`<span class="vc">${CAT[c]||c}</span>`).join('')||'<span class="muted" style="font-size:11px">未設定供應類別</span>'}</div>
+      ${v.note?`<div class="vnote">${esc(v.note)}</div>`:''}
+      <div class="vacts"><button class="btn sm" onclick="openVendor('${v.id}')">編輯</button></div></div>`;
+  });
+  document.getElementById('vendorgrid').innerHTML=h;
+}
+
+/* ============ 互動 ============ */
+function toggleItem(id){ openItems[id]=!openItems[id];
+  document.getElementById('item-'+id).classList.toggle('open'); }
+function getMatch(iid,vid){ if(!DB.matches[iid]) DB.matches[iid]=[];
+  let m=DB.matches[iid].find(x=>x.vendorId===vid);
+  if(!m){ m={vendorId:vid,status:'未詢價',price:'',moq:'',lead:'',note:'',chosen:false}; DB.matches[iid].push(m); }
+  return m; }
+async function upd(iid,vid,f,val){ const m=getMatch(iid,vid); m[f]=val; await upMatch(iid,m); refreshItem(iid); }
+async function addMatch(iid,vid){ const m=getMatch(iid,vid); await upMatch(iid,m); refreshItem(iid); }
+async function rmMatch(iid,vid){ if(DB.matches[iid]) DB.matches[iid]=DB.matches[iid].filter(m=>m.vendorId!==vid);
+  await delMatchCloud(iid,vid); refreshItem(iid); }
+async function setChosen(iid,vid){ const m=getMatch(iid,vid); const was=m.chosen;
+  (DB.matches[iid]||[]).forEach(x=>x.chosen=false); m.chosen=!was;
+  if(m.chosen && m.status==='未詢價') m.status='已選定';
+  if(cloud){ for(const x of DB.matches[iid]) await upMatch(iid,x); } else await persist();
+  refreshItem(iid); }
+function refreshItem(iid){ const it=DB.items.find(i=>i.id===iid); if(!it) return;
+  openItems[iid]=true; const old=document.getElementById('item-'+iid);
+  const tmp=document.createElement('div'); tmp.innerHTML=itemHTML(it); old.replaceWith(tmp.firstElementChild); }
+
+function openItem(id){ editingItem=id||null;
+  const gSel=document.getElementById('im_group'), tSel=document.getElementById('im_type');
+  gSel.innerHTML=GROUPS.map(g=>`<option>${g}</option>`).join('');
+  tSel.innerHTML=CATKEYS.map(c=>`<option value="${c}">${CAT[c]}</option>`).join('');
+  document.getElementById('im_del').classList.toggle('hide',!id);
+  document.getElementById('imTitle').textContent=id?'編輯品項':'新增品項';
+  if(id){ const it=DB.items.find(i=>i.id===id);
+    im_name.value=it.name; gSel.value=it.group; tSel.value=it.type;
+    im_spec.value=it.spec||''; im_prod.value=it.prod||''; im_note.value=it.note||''; }
+  else { im_name.value='';im_spec.value='';im_prod.value='';im_note.value=''; gSel.value=GROUPS[0]; tSel.value='box'; }
+  document.getElementById('itemModal').classList.add('on');
+}
+async function saveItem(){
+  const o={name:im_name.value.trim(),group:im_group.value,type:im_type.value,
+    spec:im_spec.value.trim(),prod:im_prod.value.trim(),note:im_note.value.trim()};
+  if(!o.name){ alert('請輸入品項名稱'); return; }
+  let target;
+  if(editingItem){ target=DB.items.find(i=>i.id===editingItem); Object.assign(target,o); }
+  else { o.id='i'+Date.now(); o.sort=(DB.items.reduce((m,x)=>Math.max(m,x.sort||0),0))+1; DB.items.push(o); target=o; }
+  await upItem(target); closeModal('itemModal'); renderItems(); renderDash();
+}
+async function delItem(){ if(!editingItem||!confirm('確定刪除此品項？')) return;
+  const id=editingItem; DB.items=DB.items.filter(i=>i.id!==id); delete DB.matches[id];
+  await delItemCloud(id); closeModal('itemModal'); renderItems(); renderDash(); }
+
+function openVendor(id){ editingVendor=id||null;
+  const v=id?DB.vendors.find(x=>x.id===id):null; vmCats=v?[...(v.cats||[])]:[];
+  document.getElementById('vm_cats').innerHTML=CATKEYS.map(c=>
+    `<span class="chip ${vmCats.includes(c)?'on':''}" data-c="${c}" onclick="toggleCat('${c}',this)">${CAT[c]}</span>`).join('');
+  document.getElementById('vm_del').classList.toggle('hide',!id);
+  document.getElementById('vmTitle').textContent=id?'編輯廠商':'新增廠商';
+  vm_name.value=v?v.name:''; vm_en.value=v?(v.en||''):''; vm_reg.value=v?(v.reg||''):'';
+  vm_url.value=v?(v.url||''):''; vm_tags.value=v?(v.tags||[]).join(','):''; vm_note.value=v?(v.note||''):'';
+  document.getElementById('vendorModal').classList.add('on');
+}
+function toggleCat(c,el){ if(vmCats.includes(c)) vmCats=vmCats.filter(x=>x!==c); else vmCats.push(c); el.classList.toggle('on'); }
+async function saveVendor(){
+  const o={name:vm_name.value.trim(),en:vm_en.value.trim(),reg:vm_reg.value.trim(),
+    url:vm_url.value.trim(),cats:[...vmCats],
+    tags:vm_tags.value.split(',').map(s=>s.trim()).filter(Boolean),note:vm_note.value.trim()};
+  if(!o.name){ alert('請輸入廠商名稱'); return; }
+  let target;
+  if(editingVendor){ target=DB.vendors.find(v=>v.id===editingVendor); Object.assign(target,o); }
+  else { o.id='v'+Date.now(); o.sort=(DB.vendors.reduce((m,x)=>Math.max(m,x.sort||0),0))+1; DB.vendors.push(o); target=o; }
+  await upVendor(target); closeModal('vendorModal'); renderVendors(); renderDash();
+}
+async function delVendor(){ if(!editingVendor||!confirm('確定刪除此廠商？相關詢價紀錄也會移除。')) return;
+  const id=editingVendor; DB.vendors=DB.vendors.filter(v=>v.id!==id);
+  Object.keys(DB.matches).forEach(k=>DB.matches[k]=DB.matches[k].filter(m=>m.vendorId!==id));
+  await delVendorCloud(id); closeModal('vendorModal'); renderVendors(); renderItems(); renderDash(); }
+function closeModal(id){ document.getElementById(id).classList.remove('on'); }
+
+/* ===== Tabs ===== */
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on')); t.classList.add('on');
+  ['dash','items','vendors','data'].forEach(s=>document.getElementById(s).classList.add('hide'));
+  document.getElementById(t.dataset.tab).classList.remove('hide');
+  if(t.dataset.tab==='dash') renderDash();
+  if(t.dataset.tab==='items') renderItems();
+  if(t.dataset.tab==='vendors') renderVendors();
+});
+
+/* ===== Export / Import ===== */
+function exportJSON(){ dl(JSON.stringify(DB,null,2),'GROUND-packaging-'+today()+'.json','application/json'); }
+async function importJSON(e){ const f=e.target.files[0]; if(!f) return; const r=new FileReader();
+  r.onload=async()=>{ try{ const d=JSON.parse(r.result); if(!d.vendors||!d.items) throw 0;
+    DB=d; if(!DB.matches)DB.matches={};
+    if(cloud){ await pushAllToCloud(); await cloudLoad(); } else await persist();
+    renderAll(); alert(cloud?'已匯入並寫入雲端':'已匯入'); }
+    catch(err){ alert('檔案格式不正確'); } }; r.readAsText(f); e.target.value=''; }
+function exportCSV(){
+  const rows=[['群組','品項','規格','適配類型','對應產品','廠商','狀態','單價','MOQ/規格','交期','選定','備註']];
+  DB.items.forEach(it=>{ const ms=matchesFor(it.id); const sug=suggestedVendors(it);
+    const list=ms.length?ms:sug.map(v=>({vendorId:v.id,status:'未詢價',price:'',moq:'',lead:'',note:'',chosen:false}));
+    if(!list.length){ rows.push([it.group,it.name,it.spec,CAT[it.type]||it.type,it.prod,'','','','','','','']); return; }
+    list.forEach(m=>{ const v=DB.vendors.find(x=>x.id===m.vendorId);
+      rows.push([it.group,it.name,it.spec,CAT[it.type]||it.type,it.prod,v?v.name:'',m.status,m.price,m.moq,m.lead,m.chosen?'★':'',m.note]); });
+  });
+  const csv='\ufeff'+rows.map(r=>r.map(c=>'"'+String(c==null?'':c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  dl(csv,'GROUND-packaging-matrix-'+today()+'.csv','text/csv');
+}
+async function resetAll(){ if(!confirm('清空並回到預設的 14 家廠商與包材清單。此動作會覆蓋目前資料，確定？')) return;
+  if(cloud){ await wipeCloud(); await seedCloud(); } else { seedLocal(); await persist(); renderAll(); } }
+function dl(content,name,type){ const b=new Blob([content],{type}); const u=URL.createObjectURL(b);
+  const a=document.createElement('a'); a.href=u; a.download=name; a.click(); URL.revokeObjectURL(u); }
+function today(){ const d=new Date(); return d.getFullYear()+''+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'); }
+
+/* ===== 狀態列 / 提示 ===== */
+function setMode(){ const el=document.getElementById('mode');
+  if(cloud){ el.textContent='● 雲端協作中'; el.style.color='var(--green)'; }
+  else { el.textContent='● 本機模式（未設定雲端，不會協作）'; el.style.color='var(--ink2)'; } }
+function renderWarn(){ const w=document.getElementById('storewarn');
+  if(cloud && DB.vendors.length===0 && DB.items.length===0){
+    w.classList.remove('hide'); w.innerHTML='雲端資料庫目前是空的 → 請到「<b>設定 / 備份</b>」分頁點「<b>匯入預設 14 廠商＋包材清單</b>」初始化一次。'; }
+  else if(!cloud){ w.classList.remove('hide');
+    w.innerHTML='目前為<b>本機模式</b>：資料只存在這個瀏覽器、不會與他人同步。要開啟協作，請在檔案最上方填入 Supabase 金鑰後部署（見說明檔）。'; }
+  else w.classList.add('hide');
+}
+function renderCloudStatus(){ const el=document.getElementById('cloudstatus');
+  if(cloud) el.innerHTML='✅ 已連線雲端，資料即時同步給所有開啟此網址的人。把網址分享給夥伴即可共同編輯。';
+  else el.innerHTML='⚪ 尚未設定雲端（本機模式）。在檔案最上方 <b>SUPABASE_URL</b> 與 <b>SUPABASE_ANON_KEY</b> 填入後重新部署即啟用協作。';
+  document.getElementById('refreshbtn').classList.toggle('hide',false);
+}
+function renderLegend(){ document.getElementById('legendcat').innerHTML=CATKEYS.map(c=>
+  `<span class="vc" style="margin:2px 4px 2px 0;display:inline-block"><b class="mono">${c}</b> = ${CAT[c]}</span>`).join(''); }
+function renderAll(){ renderWarn(); renderCloudStatus(); renderDash(); renderItems(); renderVendors(); renderLegend(); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ===== 啟動 ===== */
+(async function init(){
+  if(PASSCODE){ const p=prompt('請輸入存取密碼'); if(p!==PASSCODE){ document.body.innerHTML='<p style="padding:50px;font-family:sans-serif">密碼錯誤，無法存取。</p>'; return; } }
+  if(SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase){
+    try{ sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY); cloud=true; await cloudLoad(); subscribe(); }
+    catch(e){ cloud=false; await loadLocal(); alert('雲端連線失敗，暫以本機模式運作。請確認金鑰與資料表設定。'); }
+  } else { await loadLocal(); }
+  setMode(); renderAll();
+})();
+</script>
+</body>
+</html>
