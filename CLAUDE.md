@@ -132,6 +132,8 @@ create table packaging_images(id bigint generated always as identity primary key
 - 詳情用 modal：`productDetail()`（綁定/解綁包材）、`packDetail()`（照片上傳/刪除、被哪些產品用、對應供應商）。`vendorsForPack()`＝該包材的 match 供應商 ∪ 依 type 建議的供應商。
 - 照片：`uploadPhoto()` 上傳到 Storage bucket `PHOTO_BUCKET`（'packaging-photos'）→ `addImageRow` 寫 packaging_images；本機模式存 base64。
 - 寫入把關：產品/綁定走 `requireWrite('products')`；包材主檔與照片走 `requireWrite('items')`。
+- **餐點類別**：`categories` 表（name PK, sort）。`catList()` 回傳順序（表為空時退回 `PRODUCT_CATS` ∪ 產品既有類別）。產品管理頁在「未搜尋/未篩選」時 `editable`：類別標題與產品列可 HTML5 拖曳排序（`dragCatStart/Drop`、`dragProdStart/Drop`，產品僅同類別內、用 products.sort），類別可 `addCategory/renameCategory/deleteCategory`（改名會連動更新該類別產品、刪除把產品移到未分類）。`categories` 表未建時 `cloudMissingCats`＝true，類別操作會提示先建表。
+- **批量自動翻譯**：`batchImport` 對沒帶英文的列自動 `translateText()` 補上（Promise.all），免逐筆按。`recordUsage(...,silent=true)` 批量時只記 ai_usage 不洗版修改紀錄。
 - **批量上傳產品**（產品管理「⤓ 批量上傳」）：兩模式共用 `batchRows` ＋ `renderBatchRows()` 可編輯預覽 → `batchImport()` 經 `upProductsBatch` 一次寫入。① 截圖辨識：`batchRecognize()` 把圖 `downscaleImage` 後 POST `/api/extract`，回傳產品累加進預覽；視窗開啟時 document paste 事件可直接貼上截圖。② 貼上文字：`batchParseText()` 逗號/Tab 分欄。
 
 ## 改程式時的注意事項

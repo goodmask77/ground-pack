@@ -297,9 +297,12 @@ create table if not exists ai_usage(
   ts timestamptz default now(), kind text, model text,
   input_tokens int, output_tokens int, cost_usd numeric, user_name text);
 
+create table if not exists categories(name text primary key, sort int default 0);
+
 alter publication supabase_realtime add table products;
 alter publication supabase_realtime add table product_packaging;
-alter publication supabase_realtime add table packaging_images;</textarea>
+alter publication supabase_realtime add table packaging_images;
+alter publication supabase_realtime add table categories;</textarea>
     <div class="note" style="margin-top:8px">照片上傳另需在 <b>Storage</b> 建一個<b>公開 bucket：packaging-photos</b>，並開放 anon 的 SELECT/INSERT 政策。</div>
     </details>
 
@@ -554,7 +557,8 @@ const SEED_ITEMS = [
 ].map((r,i)=>({id:'i'+(i+1),group:r[0],name:r[1],type:r[2],spec:r[3],prod:r[4],note:r[5],sort:i}));
 
 /* ============ 狀態 ============ */
-let cloud=false, sb=null, DB={vendors:[],items:[],matches:{},products:[],prodPack:{},images:{}};
+let cloud=false, sb=null, DB={vendors:[],items:[],matches:{},products:[],prodPack:{},images:{},cats:[]};
+let cloudMissingCats=false, dragProdId=null, dragCatName=null;
 let openItems={}, editingItem=null, editingVendor=null, vmCats=[];
 let editingProduct=null, anMode='p2p', detailPackId=null, batchRows=[], selCat=null, pmEnTouched=false;
 let cloudMissingProducts=false;   // 雲端缺 products 表時為 true → 警告使用者，避免白打資料不落地
@@ -668,9 +672,9 @@ async function loadLocal(){ let raw=null;
   catch(e){ try{ raw=localStorage.getItem(KEY);}catch(_){} }
   if(raw){ try{ DB=JSON.parse(raw);}catch(e){ seedLocal(); } } else seedLocal();
   if(!DB.vendors)DB.vendors=[]; if(!DB.items)DB.items=[]; if(!DB.matches)DB.matches={}; if(!DB.accounts)DB.accounts=[]; if(!DB.history)DB.history=[];
-  if(!DB.products)DB.products=[]; if(!DB.prodPack)DB.prodPack={}; if(!DB.images)DB.images={}; }
+  if(!DB.products)DB.products=[]; if(!DB.prodPack)DB.prodPack={}; if(!DB.images)DB.images={}; if(!DB.cats)DB.cats=[]; }
 function seedLocal(){ DB={vendors:JSON.parse(JSON.stringify(SEED_VENDORS)),
-  items:JSON.parse(JSON.stringify(SEED_ITEMS)), matches:{}, accounts:[], history:[], products:[], prodPack:{}, images:{}}; }
+  items:JSON.parse(JSON.stringify(SEED_ITEMS)), matches:{}, accounts:[], history:[], products:[], prodPack:{}, images:{}, cats:[]}; }
 
 /* ============ 雲端層 ============ */
 async function cloudLoad(){
@@ -686,7 +690,10 @@ async function cloudLoad(){
   (mr.data||[]).forEach(r=>{ (DB.matches[r.item_id]=DB.matches[r.item_id]||[]).push(
     {vendorId:r.vendor_id,status:r.status,price:r.price,moq:r.moq,lead:r.lead,note:r.note,chosen:r.chosen,hidden:!!r.hidden}); });
   // ↓ 新表：各自容錯，未建表時不影響其他資料
-  DB.products=[]; DB.prodPack={}; DB.images={}; cloudMissingProducts=false;
+  DB.products=[]; DB.prodPack={}; DB.images={}; DB.cats=[]; cloudMissingProducts=false; cloudMissingCats=false;
+  try{ const cr=await sb.from('categories').select('*').order('sort');
+    if(cr.error) cloudMissingCats=true;
+    else DB.cats=(cr.data||[]).map(r=>({name:r.name,sort:r.sort||0})); }catch(e){ cloudMissingCats=true; }
   try{ const pr=await sb.from('products').select('*').order('sort');
     if(pr.error) cloudMissingProducts=true;
     else DB.products=(pr.data||[]).map(r=>({id:r.id,category:r.category,name:r.name,en:r.english_name,price:r.price,note:r.note,active:r.is_active!==false,sort:r.sort||0})); }catch(e){ cloudMissingProducts=true; }
@@ -713,6 +720,18 @@ async function upProduct(p){ if(!cloud) return persist();
   await sb.from('products').upsert({id:p.id,category:p.category,name:p.name,english_name:p.en,price:p.price,note:p.note,is_active:p.active!==false,sort:p.sort||0}); }
 async function upProductsBatch(arr){ if(!cloud) return persist();
   await sb.from('products').upsert(arr.map(p=>({id:p.id,category:p.category,name:p.name,english_name:p.en,price:p.price,note:p.note,is_active:p.active!==false,sort:p.sort||0}))); }
+/* 餐點類別 */
+function catList(){
+  const fromTable=(DB.cats||[]).slice().sort((a,b)=>(a.sort||0)-(b.sort||0)).map(c=>c.name);
+  const base=fromTable.length?fromTable:PRODUCT_CATS.slice();
+  const extra=[...new Set((DB.products||[]).map(p=>p.category||'').filter(Boolean))].filter(c=>!base.includes(c));
+  return base.concat(extra);
+}
+async function saveCatOrder(names){
+  DB.cats=names.map((n,i)=>({name:n,sort:i}));
+  if(cloud){ try{ await sb.from('categories').upsert(names.map((n,i)=>({name:n,sort:i}))); }catch(e){} } else await persist();
+}
+async function delCatRow(name){ if(cloud){ try{ await sb.from('categories').delete().eq('name',name); }catch(e){} } else await persist(); }
 async function delProductCloud(id){ if(!cloud) return persist();
   await sb.from('product_packaging').delete().eq('product_id',id);
   await sb.from('products').delete().eq('id',id); }
@@ -766,6 +785,7 @@ function subscribe(){ if(!cloud) return;
     .on('postgres_changes',{event:'*',schema:'public',table:'products'},refetchSoon)
     .on('postgres_changes',{event:'*',schema:'public',table:'product_packaging'},refetchSoon)
     .on('postgres_changes',{event:'*',schema:'public',table:'packaging_images'},refetchSoon)
+    .on('postgres_changes',{event:'*',schema:'public',table:'categories'},refetchSoon)
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'history'},()=>{
       if(!document.getElementById('history').classList.contains('hide')) renderHistory(); })
     .subscribe();
@@ -788,13 +808,18 @@ const AI_PRICE={ 'claude-haiku-4-5':{in:1,out:5}, 'claude-sonnet-4-6':{in:3,out:
 function priceFor(model){ if(!model) return {in:3,out:15}; const k=Object.keys(AI_PRICE).find(p=>String(model).indexOf(p)===0); return k?AI_PRICE[k]:{in:3,out:15}; }
 function estCost(model,usage){ if(!usage) return 0; const p=priceFor(model);
   return (usage.input_tokens||0)/1e6*p.in + (usage.output_tokens||0)/1e6*p.out; }
-async function recordUsage(kind,model,usage,label){
+async function recordUsage(kind,model,usage,label,silent){
   const cost=estCost(model,usage);
   const inT=(usage&&usage.input_tokens)||0, outT=(usage&&usage.output_tokens)||0;
   if(cloud){ try{ await sb.from('ai_usage').insert({kind,model:model||'',input_tokens:inT,output_tokens:outT,cost_usd:Number(cost.toFixed(6)),user_name:(currentUser&&currentUser.name)||''}); }catch(e){} }
-  logHist(kind==='extract'?'AI辨識':'AI翻譯', label||'', `${inT}+${outT} tokens · 估 $${cost.toFixed(4)}`);
+  if(!silent) logHist(kind==='extract'?'AI辨識':'AI翻譯', label||'', `${inT}+${outT} tokens · 估 $${cost.toFixed(4)}`);
   if(!document.getElementById('data').classList.contains('hide')) renderAiUsage();
 }
+async function translateText(name){
+  const r=await fetch('/api/translate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:name})});
+  if(!r.ok) throw new Error('translate '+r.status);
+  const d=await r.json(); if(d.usage) recordUsage('translate',d.model,d.usage,name,true);
+  return d.english||''; }
 async function renderAiUsage(){
   const el=document.getElementById('aiusage'); if(!el) return;
   if(!cloud){ el.innerHTML='<div class="muted" style="font-size:12px">本機模式不統計花費。</div>'; return; }
@@ -1006,7 +1031,7 @@ function vendorsForPack(it){ if(!it) return [];
 
 function renderProdCatFilter(){ const sel=document.getElementById('prodCatFilter'); if(!sel) return;
   const cur=sel.value||'';
-  const cats=[...new Set(PRODUCT_CATS.concat(DB.products.map(p=>p.category).filter(Boolean)))];
+  const cats=catList();
   sel.innerHTML='<option value="">全部類別</option>'+cats.map(c=>`<option ${cur===c?'selected':''}>${esc(c)}</option>`).join(''); }
 function jsEsc(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
 function selectCat(c){ selCat=c; renderProducts(); }
@@ -1024,14 +1049,25 @@ function renderProducts(){
     if(q && !((p.name||'').toLowerCase().includes(q)||(p.en||'').toLowerCase().includes(q))) return false;
     return true; });
   if(!list.length){ el.innerHTML='<div class="note">沒有符合條件的產品。</div>'; renderCatPhotos(); return; }
-  const cats=[...new Set(PRODUCT_CATS.concat(list.map(p=>p.category||'未分類')))].filter(c=>list.some(p=>(p.category||'未分類')===c));
-  if(!selCat || !cats.includes(selCat)) selCat=cats[0];
+  const editable = canEdit('products') && !q && !catf && !onlyActive;   // 只有未搜尋/未篩選時才開放拖曳排序與類別編輯
+  let cats;
+  if(editable){ cats=catList().slice();
+    if(DB.products.some(p=>!(p.category||'').trim()) && !cats.includes('未分類')) cats.push('未分類'); }
+  else cats=[...new Set(catList().concat(list.map(p=>p.category||'未分類')))].filter(c=>list.some(p=>(p.category||'未分類')===c));
+  const nonEmpty=cats.filter(c=>list.some(p=>(p.category||'未分類')===c));
+  if(!selCat || !cats.includes(selCat)) selCat=nonEmpty[0]||cats[0]||null;
   let h='';
-  cats.forEach(c=>{ const ps=list.filter(p=>(p.category||'未分類')===c); if(!ps.length) return;
-    h+=`<div class="acat click ${c===selCat?'sel':''}" onclick="selectCat('${jsEsc(c)}')">${esc(c)} <span class="c">${ps.length} 項</span>${c===selCat?'<span class="badge acc" style="margin-left:auto">▶ 右側看包材照片</span>':'<span class="muted" style="margin-left:auto;font-size:11px">點此看包材照片</span>'}</div>`;
-    h+='<table class="atable"><thead><tr><th>品名</th><th>售價</th><th>包材</th><th>狀態</th><th></th></tr></thead><tbody>';
+  if(editable){ h+=`<div class="row" style="margin-bottom:8px;gap:8px;align-items:center"><span class="muted" style="font-size:12px">⠿ 拖曳可排序類別與產品（同類別內）</span><button class="btn ghost sm wr-products" style="margin-left:auto" onclick="addCategory()">＋ 新增類別</button></div>`; }
+  cats.forEach(c=>{ const ps=list.filter(p=>(p.category||'未分類')===c).sort((a,b)=>(a.sort||0)-(b.sort||0));
+    h += editable
+      ? `<div class="acat click ${c===selCat?'sel':''}" draggable="true" ondragstart="dragCatStart(event,'${jsEsc(c)}')" ondragover="event.preventDefault()" ondrop="dragCatDrop(event,'${jsEsc(c)}')" onclick="selectCat('${jsEsc(c)}')"><span style="cursor:grab">⠿</span> ${esc(c)} <span class="c">${ps.length} 項</span><span style="margin-left:auto;display:flex;gap:6px;align-items:center">${c===selCat?'<span class="badge acc">▶ 看包材照片</span>':'<span class="muted" style="font-size:11px">點看包材照片</span>'}<button class="btn ghost sm" title="改名" onclick="event.stopPropagation();renameCategory('${jsEsc(c)}')">✎</button><button class="x" title="刪除類別" onclick="event.stopPropagation();deleteCategory('${jsEsc(c)}')">×</button></span></div>`
+      : `<div class="acat click ${c===selCat?'sel':''}" onclick="selectCat('${jsEsc(c)}')">${esc(c)} <span class="c">${ps.length} 項</span>${c===selCat?'<span class="badge acc" style="margin-left:auto">▶ 右側看包材照片</span>':'<span class="muted" style="margin-left:auto;font-size:11px">點此看包材照片</span>'}</div>`;
+    if(!ps.length){ h+='<div class="muted" style="font-size:12px;padding:6px 2px 2px">（尚無產品）</div>'; return; }
+    h+='<table class="atable"><thead><tr>'+(editable?'<th style="width:18px"></th>':'')+'<th>品名</th><th>售價</th><th>包材</th><th>狀態</th><th></th></tr></thead><tbody>';
     ps.forEach(p=>{ const cnt=(DB.prodPack[p.id]||[]).filter(id=>DB.items.find(i=>i.id===id)).length;
-      h+=`<tr style="cursor:pointer" onclick="productDetail('${p.id}')">
+      const dattr = editable ? `draggable="true" ondragstart="dragProdStart(event,'${p.id}')" ondragover="event.preventDefault()" ondrop="dragProdDrop(event,'${p.id}')"` : '';
+      h+=`<tr style="cursor:pointer" ${dattr} onclick="productDetail('${p.id}')">
+        ${editable?'<td style="cursor:grab;color:var(--ink2)">⠿</td>':''}
         <td class="vn">${esc(p.name)}${p.en?`<br><span class="muted mono" style="font-size:10px">${esc(p.en)}</span>`:''}</td>
         <td class="mono">${p.price?'$'+esc(p.price):'—'}</td>
         <td class="mono">${cnt}</td>
@@ -1041,6 +1077,46 @@ function renderProducts(){
   el.innerHTML=warn+h;
   renderCatPhotos();
 }
+/* 拖曳排序：產品（同類別內）、類別 */
+function dragProdStart(e,id){ dragProdId=id; if(e.dataTransfer) e.dataTransfer.effectAllowed='move'; }
+async function dragProdDrop(e,targetId){ e.preventDefault(); e.stopPropagation();
+  const a=DB.products.find(p=>p.id===dragProdId), b=DB.products.find(p=>p.id===targetId); dragProdId=null;
+  if(!a||!b||a===b) return;
+  const cat=a.category||'未分類'; if((b.category||'未分類')!==cat) return;   // 僅同類別內排序
+  const arr=DB.products.filter(p=>(p.category||'未分類')===cat).sort((x,y)=>(x.sort||0)-(y.sort||0));
+  const from=arr.indexOf(a), to=arr.indexOf(b); if(from<0||to<0) return;
+  arr.splice(from,1); arr.splice(to,0,a); arr.forEach((p,i)=>p.sort=i);
+  await upProductsBatch(arr); renderProducts(); }
+function dragCatStart(e,name){ dragCatName=name; if(e.dataTransfer) e.dataTransfer.effectAllowed='move'; }
+async function dragCatDrop(e,targetName){ e.preventDefault(); e.stopPropagation();
+  const src=dragCatName; dragCatName=null; if(!src||src===targetName) return;
+  if(cloud && cloudMissingCats){ alert(catSqlMsg()); return; }
+  const order=catList(); const from=order.indexOf(src), to=order.indexOf(targetName); if(from<0||to<0) return;
+  order.splice(from,1); order.splice(to,0,src);
+  await saveCatOrder(order); renderProducts(); logHist('排序類別', src, ''); }
+function catSqlMsg(){ return '尚未建立 categories 資料表，類別的排序/改名無法保存。\n請到「設定 / 備份 → 進階」展開建表 SQL（已含 categories）執行後重整。'; }
+async function addCategory(){ if(!requireWrite('products'))return;
+  if(cloud && cloudMissingCats){ alert(catSqlMsg()); return; }
+  const name=(prompt('新類別名稱：')||'').trim(); if(!name) return;
+  if(catList().includes(name)){ alert('類別已存在'); return; }
+  await saveCatOrder(catList().concat(name)); renderProducts(); logHist('新增類別', name, ''); }
+async function renameCategory(oldName){ if(!requireWrite('products'))return;
+  if(cloud && cloudMissingCats){ alert(catSqlMsg()); return; }
+  const name=(prompt('改類別名稱：', oldName)||'').trim(); if(!name||name===oldName) return;
+  if(catList().includes(name)){ alert('已有同名類別'); return; }
+  const affected=DB.products.filter(p=>(p.category||'未分類')===oldName); affected.forEach(p=>p.category=name);
+  await saveCatOrder(catList().map(c=>c===oldName?name:c)); await delCatRow(oldName);
+  if(affected.length) await upProductsBatch(affected);
+  if(selCat===oldName) selCat=name;
+  renderProducts(); logHist('類別改名', oldName+' → '+name, affected.length+' 項產品'); }
+async function deleteCategory(name){ if(!requireWrite('products'))return;
+  if(cloud && cloudMissingCats){ alert(catSqlMsg()); return; }
+  const affected=DB.products.filter(p=>(p.category||'未分類')===name);
+  if(affected.length){ if(!confirm('「'+name+'」有 '+affected.length+' 項產品，刪除類別會把它們移到「未分類」。繼續？')) return;
+    affected.forEach(p=>p.category='未分類'); await upProductsBatch(affected); }
+  await delCatRow(name); await saveCatOrder(catList().filter(c=>c!==name));
+  if(selCat===name) selCat=null;
+  renderProducts(); logHist('刪除類別', name, ''); }
 function renderCatPhotos(){
   const el=document.getElementById('catphotos'); if(!el) return;
   const canI=canEdit('items');
@@ -1072,14 +1148,14 @@ async function delPhotoCat(packId,imgId){ if(!requireWrite('items'))return; if(!
   renderCatPhotos(); renderItems(); logHist('刪除照片', packName(packId), ''); }
 function openProduct(id){ if(!requireWrite('products'))return; editingProduct=id||null;
   const sel=document.getElementById('pm_cat');
-  const cats=[...new Set(PRODUCT_CATS.concat(DB.products.map(p=>p.category).filter(Boolean)))];
+  const cats=catList(); const def=(selCat&&cats.includes(selCat))?selCat:(cats[0]||'未分類');
   sel.innerHTML=cats.map(c=>`<option>${esc(c)}</option>`).join('');
   document.getElementById('pm_del').classList.toggle('hide',!id);
   document.getElementById('pmTitle').textContent=id?'編輯產品':'新增產品';
   if(id){ const p=DB.products.find(x=>x.id===id);
-    sel.value=p.category||PRODUCT_CATS[0]; pm_name.value=p.name||''; pm_en.value=p.en||'';
+    sel.value=p.category||def; pm_name.value=p.name||''; pm_en.value=p.en||'';
     pm_price.value=p.price||''; pm_note.value=p.note||''; pm_active.checked=p.active!==false; }
-  else { sel.value=PRODUCT_CATS[0]; pm_name.value='';pm_en.value='';pm_price.value='';pm_note.value=''; pm_active.checked=true; }
+  else { sel.value=def; pm_name.value='';pm_en.value='';pm_price.value='';pm_note.value=''; pm_active.checked=true; }
   pmEnTouched = !!(pm_en.value.trim());   // 已有英文＝視為手動，blur 不覆蓋
   document.getElementById('pm_en_status').textContent='';
   document.getElementById('productModal').classList.add('on');
@@ -1296,13 +1372,20 @@ function renderBatchRows(){
     <td><input list="bm_catlist" value="${esc(r.category||'')}" oninput="batchRows[${i}].category=this.value" style="width:88px;border:1px solid var(--line2);padding:3px 5px;background:#fff"></td>
     <td>${inp(i,'name',130)}</td><td>${inp(i,'en',120)}</td><td>${inp(i,'price',58)}</td><td>${inp(i,'note',130)}</td>
     <td><button class="x" title="刪除這筆" onclick="batchRows.splice(${i},1);renderBatchRows()">×</button></td></tr>`; });
-  h+='</tbody></table></div><datalist id="bm_catlist">'+PRODUCT_CATS.map(c=>`<option value="${esc(c)}">`).join('')+'</datalist>';
+  h+='</tbody></table></div><datalist id="bm_catlist">'+catList().map(c=>`<option value="${esc(c)}">`).join('')+'</datalist>';
   el.innerHTML=h;
 }
 async function batchImport(){ if(!requireWrite('products'))return;
   if(cloud && cloudMissingProducts){ alert('雲端尚未建立 products 資料表，現在匯入不會被保存。\n請先到 Supabase 執行建表 SQL（見「設定 / 備份」頁），完成後重整再匯入。'); return; }
   const rows=batchRows.filter(r=>(r.name||'').trim());
   if(!rows.length){ alert('沒有可匯入的資料（品名不可空白）。'); return; }
+  // 沒帶英文的，自動翻譯補上（不需手動逐筆按）
+  const need=rows.filter(r=>!(r.en||'').trim());
+  if(need.length){ const imp=document.getElementById('bm_import'); const old=imp?imp.textContent:'';
+    if(imp){ imp.textContent='自動翻譯英文中…'; imp.disabled=true; }
+    let ok=0; await Promise.all(need.map(async r=>{ try{ const en=await translateText(r.name.trim()); if(en){ r.en=en; ok++; } }catch(e){} }));
+    if(imp){ imp.textContent=old||'全部匯入'; imp.disabled=false; }
+    if(ok) logHist('批量自動翻譯', ok+' 筆英文', ''); }
   let base=(DB.products.reduce((m,x)=>Math.max(m,x.sort||0),0))+1;
   const stamp=Date.now();
   const created=rows.map((r,i)=>({id:'p'+stamp+'_'+i, category:(r.category||'').trim()||'未分類',
