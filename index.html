@@ -37,6 +37,8 @@ header{position:sticky;top:0;z-index:50;background:var(--paper);border-bottom:2p
 .tab.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 .authbox{display:flex;align-items:center;gap:8px}
 .authbox .who{font-family:var(--mono);font-size:11px;color:var(--ink2);white-space:nowrap}
+#robar{display:flex;align-items:center;gap:12px;background:#fbeee6;border:1.5px solid var(--accent);color:var(--accent-d);padding:9px 13px;margin-top:14px;font-size:13px;font-weight:600}
+#robar .btn{margin-left:auto}
 body.ro .wronly{display:none!important}
 body.ro .qtab select,body.ro .qtab input,body.ro .starbtn,body.ro .x,body.ro .addv{pointer-events:none;opacity:.5}
 h2{font-family:var(--disp);font-weight:900;font-size:18px;letter-spacing:-.3px;margin:26px 0 12px;display:flex;align-items:center;gap:10px}
@@ -147,6 +149,8 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
 </header>
 
 <div class="wrap">
+  <div id="robar" class="hide">🔒 唯讀模式：目前只能檢視，無法編輯或刪除。請登入帳號後操作。
+    <button class="btn acc sm" onclick="openLogin()">登入</button></div>
   <section id="dash">
     <div id="storewarn" class="note hide"></div>
     <div class="stats" id="statgrid"></div>
@@ -762,6 +766,7 @@ function renderAuth(){
     el.innerHTML=`<span class="who">唯讀模式</span><button class="btn acc sm" onclick="openLogin()">登入</button>`;
   }
   document.body.classList.toggle('ro', !currentUser);
+  document.getElementById('robar').classList.toggle('hide', !!currentUser);
   const at=document.getElementById('tab-accounts');
   const showAcc=!!(currentUser&&currentUser.isAdmin);
   at.classList.toggle('hide', !showAcc);
