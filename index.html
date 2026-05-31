@@ -1282,6 +1282,8 @@ async function saveProduct(){ if(!requireWrite('products'))return;
     price:pm_price.value.trim(), note:pm_note.value.trim(), active:pm_active.checked,
     unit:document.getElementById('pm_unit').value, tags:[...pmTags]};
   if(!o.name){ alert('請輸入品名'); return; }
+  if(!o.en){ const st=document.getElementById('pm_en_status'); if(st)st.textContent='翻譯中…';   // 沒英文就先翻完再存
+    try{ o.en=await translateText(o.name); }catch(e){} if(st)st.textContent=''; }
   const isNew=!editingProduct; let target;
   if(editingProduct){ target=DB.products.find(p=>p.id===editingProduct); Object.assign(target,o); }
   else { o.id='p'+Date.now(); o.sort=(DB.products.reduce((m,x)=>Math.max(m,x.sort||0),0))+1; DB.products.push(o); target=o; }
