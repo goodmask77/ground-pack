@@ -1499,14 +1499,14 @@ async function batchImport(){ if(!requireWrite('products'))return;
 function openVendor(id){ if(!requireWrite('vendors'))return; editingVendor=id||null;
   const v=id?DB.vendors.find(x=>x.id===id):null; vmCats=v?[...(v.cats||[])]:[];
   document.getElementById('vm_cats').innerHTML=CATKEYS.map(c=>
-    `<span class="chip ${vmCats.includes(c)?'on':''}" data-c="${c}" onclick="toggleCat('${c}',this)">${CAT[c]}</span>`).join('');
+    `<span class="chip ${vmCats.includes(c)?'on':''}" data-c="${c}" onclick="toggleVmCat('${c}',this)">${CAT[c]}</span>`).join('');
   document.getElementById('vm_del').classList.toggle('hide',!id);
   document.getElementById('vmTitle').textContent=id?'編輯廠商':'新增廠商';
   vm_name.value=v?v.name:''; vm_en.value=v?(v.en||''):''; vm_reg.value=v?(v.reg||''):'';
   vm_url.value=v?(v.url||''):''; vm_tags.value=v?(v.tags||[]).join(','):''; vm_note.value=v?(v.note||''):'';
   document.getElementById('vendorModal').classList.add('on');
 }
-function toggleCat(c,el){ if(vmCats.includes(c)) vmCats=vmCats.filter(x=>x!==c); else vmCats.push(c); el.classList.toggle('on'); }
+function toggleVmCat(c,el){ if(vmCats.includes(c)) vmCats=vmCats.filter(x=>x!==c); else vmCats.push(c); el.classList.toggle('on'); }
 async function saveVendor(){ if(!requireWrite('vendors'))return;
   const o={name:vm_name.value.trim(),en:vm_en.value.trim(),reg:vm_reg.value.trim(),
     url:vm_url.value.trim(),cats:[...vmCats],
