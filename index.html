@@ -155,9 +155,10 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
 .acat.click{cursor:pointer}
 .acat.click:hover{color:var(--accent)}
 .acat.sel{color:var(--accent);border-bottom-color:var(--accent)}
-.pcols{display:grid;grid-template-columns:1.7fr 1fr;gap:16px;margin-top:12px;align-items:start}
-@media(max-width:900px){.pcols{grid-template-columns:1fr}}
-.catpanel{position:sticky;top:84px;border:1.5px solid var(--line2);background:var(--card);padding:14px;max-height:calc(100vh - 110px);overflow:auto}
+.atable th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+.atable th.sortable:hover{color:var(--ink)}
+.atable th.sortable.act{color:var(--accent)}
+.atable.grid thead th{position:sticky;top:84px;background:var(--paper);z-index:2}
 .acat .c{font-family:var(--mono);font-size:11px;color:var(--ink2)}
 /* 照片 */
 .phgrid{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
@@ -259,10 +260,7 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
       <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" id="prodHideInactive" style="width:auto" onchange="renderProducts()"> 只看啟用中</label>
     </div>
     <div id="tagfilter" class="row" style="margin-top:10px;gap:6px;flex-wrap:wrap"></div>
-    <div class="pcols">
-      <div id="productlist"></div>
-      <div id="catphotos" class="catpanel"></div>
-    </div>
+    <div id="productlist" style="margin-top:12px"></div>
   </section>
 
   <section id="items" class="hide">
@@ -640,6 +638,8 @@ let selTag=null, collapsedCats={}, pmTags=[];
 const DEFAULT_UNITS=['個','箱','包','條','份','張','組','杯','份量'];
 let openItems={}, editingItem=null, editingVendor=null, vmCats=[];
 let editingProduct=null, anMode='p2p', detailPackId=null, batchRows=[], selCat=null, pmEnTouched=false;
+let prodSort=null, prodGroup='cat';   // prodSort={col,dir:±1}；prodGroup: 'cat'=依類別分組(可拖曳) / 'flat'=攤平
+const PSORT_LAB={cat:'類別',name:'品名',unit:'單位',price:'售價',cnt:'包材數',status:'狀態'};
 let cloudMissingProducts=false;   // 雲端缺 products 表時為 true → 警告使用者，避免白打資料不落地
 const KEY='ground_pack_v1';
 
@@ -1128,7 +1128,36 @@ function renderProdCatFilter(){ const sel=document.getElementById('prodCatFilter
   const cats=catList();
   sel.innerHTML='<option value="">全部類別</option>'+cats.map(c=>`<option ${cur===c?'selected':''}>${esc(c)}</option>`).join(''); }
 function jsEsc(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
-function selectCat(c){ selCat=c; renderProducts(); }
+function packCount(p){ return (DB.prodPack[p.id]||[]).filter(id=>DB.items.find(i=>i.id===id)).length; }
+function prodKey(p,col){ switch(col){
+  case 'cat': return p.category||'未分類';
+  case 'name': return (p.name||'').toLowerCase();
+  case 'unit': return p.unit||'';
+  case 'price': return parseFloat(String(p.price==null?'':p.price).replace(/[^\d.]/g,''))||0;
+  case 'cnt': return packCount(p);
+  case 'status': return p.active===false?1:0;
+  default: return ''; } }
+function prodCmp(a,b,col){ const x=prodKey(a,col), y=prodKey(b,col);
+  if(typeof x==='number') return x-y; return String(x).localeCompare(String(y),'zh-Hant'); }
+function sortProds(col){ if(prodSort&&prodSort.col===col){ if(prodSort.dir>0) prodSort.dir=-1; else prodSort=null; }
+  else prodSort={col,dir:1}; renderProducts(); }
+function clearProdSort(){ prodSort=null; renderProducts(); }
+function setProdGroup(m){ prodGroup=m; renderProducts(); }
+function pTh(label,col,extra){ if(!col) return `<th ${extra||''}>${label}</th>`;
+  const act=prodSort&&prodSort.col===col; const ind=act?(prodSort.dir>0?' ▲':' ▼'):'';
+  return `<th class="sortable${act?' act':''}" onclick="sortProds('${col}')" ${extra||''}>${label}${ind}</th>`; }
+function prodTags(p){ return (p.tags||[]).length?`<div class="chiplist" style="margin-top:3px">${(p.tags||[]).map(t=>`<span class="minichip" onclick="event.stopPropagation();setTagFilter('${jsEsc(t)}')">#${esc(t)}</span>`).join('')}</div>`:''; }
+function prodRow(p,opt){ opt=opt||{}; const cnt=packCount(p);
+  const dattr = opt.drag ? `ondragover="event.preventDefault()" ondrop="dragProdDrop(event,'${p.id}')"` : '';
+  return `<tr style="cursor:pointer" ${dattr} onclick="productDetail('${p.id}')">
+    ${opt.drag?`<td style="cursor:grab;color:var(--ink2)" draggable="true" ondragstart="dragProdStart(event,'${p.id}')">⠿</td>`:''}
+    ${opt.showCat?`<td class="mono" style="font-size:11px;color:var(--ink2)">${esc(p.category||'未分類')}</td>`:''}
+    <td class="vn">${esc(p.name)}${p.en?`<br><span class="muted mono" style="font-size:10px">${esc(p.en)}</span>`:''}${prodTags(p)}</td>
+    <td class="mono">${esc(p.unit||'')||'—'}</td>
+    <td class="mono">${p.price?'$'+esc(p.price):'—'}</td>
+    <td class="mono">${cnt}</td>
+    <td>${p.active===false?'<span class="badge off">停用</span>':'<span class="badge gn">啟用</span>'}</td>
+    <td><button class="btn ghost sm wr-products" onclick="event.stopPropagation();openProduct('${p.id}')">編輯</button></td></tr>`; }
 function renderProducts(){
   const el=document.getElementById('productlist'); if(!el) return;
   renderProdCatFilter();
@@ -1136,7 +1165,7 @@ function renderProducts(){
   const catf=(document.getElementById('prodCatFilter')||{}).value||'';
   const onlyActive=(document.getElementById('prodHideInactive')||{}).checked;
   const warn = cloudMissingProducts ? '<div class="note" style="border-color:var(--accent);color:var(--accent-d)"><b>⚠ 雲端尚未建立 products 等資料表</b>，現在輸入的產品<b>不會被儲存</b>、重整就會消失。請先到 Supabase 執行建表 SQL（見「設定 / 備份」頁），完成後重整即可正常保存。</div>' : '';
-  if(!DB.products.length){ el.innerHTML=warn+'<div class="note">還沒有產品。點右上「＋ 新增產品」開始。</div>'; renderCatPhotos(); return; }
+  if(!DB.products.length){ el.innerHTML=warn+'<div class="note">還沒有產品。點右上「＋ 新增產品」開始。</div>'; return; }
   let list=DB.products.filter(p=>{
     if(catf && (p.category||'未分類')!==catf) return false;
     if(onlyActive && p.active===false) return false;
@@ -1144,43 +1173,48 @@ function renderProducts(){
     if(q && !((p.name||'').toLowerCase().includes(q)||(p.en||'').toLowerCase().includes(q))) return false;
     return true; });
   renderTagFilter();
-  if(!list.length){ el.innerHTML='<div class="note">沒有符合條件的產品。</div>'; renderCatPhotos(); return; }
-  const editable = canEdit('products') && !q && !catf && !onlyActive && !selTag;   // 只有未搜尋/未篩選/未選標籤時才開放拖曳排序與類別編輯
-  let cats;
-  if(editable){ cats=catList().slice();
-    if(DB.products.some(p=>!(p.category||'').trim()) && !cats.includes('未分類')) cats.push('未分類'); }
-  else cats=[...new Set(catList().concat(list.map(p=>p.category||'未分類')))].filter(c=>list.some(p=>(p.category||'未分類')===c));
-  const nonEmpty=cats.filter(c=>list.some(p=>(p.category||'未分類')===c));
-  if(!selCat || !cats.includes(selCat)) selCat=nonEmpty[0]||cats[0]||null;
-  let h='';
-  h+=`<div class="row" style="margin-bottom:8px;gap:8px;align-items:center">
-    <button class="btn ghost sm" onclick="setAllCats(false)">全部展開</button>
-    <button class="btn ghost sm" onclick="setAllCats(true)">全部折疊</button>
-    ${editable?'<span class="muted" style="font-size:12px;margin-left:6px">⠿ 拖曳排序　▶ 點箭頭折疊</span><button class="btn ghost sm wr-products" style="margin-left:auto" onclick="addCategory()">＋ 新增類別</button>':''}</div>`;
-  cats.forEach(c=>{ const ps=list.filter(p=>(p.category||'未分類')===c).sort((a,b)=>(a.sort||0)-(b.sort||0));
-    const collapsed=!!collapsedCats[c];
-    const titleInner=`<span style="flex:1">${collapsed?'▶':'▼'} ${esc(c)} <span class="c">${ps.length} 項</span></span>`;
-    const photoBtn=`<button class="btn ghost sm" title="右側顯示此類別包材照片" onclick="event.stopPropagation();selectCat('${jsEsc(c)}')">${c===selCat?'★ 包材照片':'看包材照片'}</button>`;
-    h += editable
-      ? `<div class="acat ${c===selCat?'sel':''}" style="user-select:none;cursor:pointer" onclick="toggleCat('${jsEsc(c)}')" ondragover="event.preventDefault()" ondrop="dragCatDrop(event,'${jsEsc(c)}')"><span draggable="true" ondragstart="dragCatStart(event,'${jsEsc(c)}')" onclick="event.stopPropagation()" style="cursor:grab;color:var(--ink2)">⠿</span> ${titleInner}<span style="display:flex;gap:6px;align-items:center">${photoBtn}<button class="btn ghost sm" title="改名" onclick="event.stopPropagation();renameCategory('${jsEsc(c)}')">✎</button><button class="x" title="刪除類別" onclick="event.stopPropagation();deleteCategory('${jsEsc(c)}')">×</button></span></div>`
-      : `<div class="acat ${c===selCat?'sel':''}" style="user-select:none;cursor:pointer" onclick="toggleCat('${jsEsc(c)}')">${titleInner}${photoBtn}</div>`;
-    if(collapsed) return;
-    if(!ps.length){ h+='<div class="muted" style="font-size:12px;padding:6px 2px 2px">（尚無產品）</div>'; return; }
-    h+='<table class="atable"><thead><tr>'+(editable?'<th style="width:18px"></th>':'')+'<th>品名</th><th>單位</th><th>售價</th><th>包材</th><th>狀態</th><th></th></tr></thead><tbody>';
-    ps.forEach(p=>{ const cnt=(DB.prodPack[p.id]||[]).filter(id=>DB.items.find(i=>i.id===id)).length;
-      const dattr = editable ? `ondragover="event.preventDefault()" ondrop="dragProdDrop(event,'${p.id}')"` : '';
-      const tagHtml=(p.tags||[]).length?`<div class="chiplist" style="margin-top:3px">${(p.tags||[]).map(t=>`<span class="minichip" onclick="event.stopPropagation();setTagFilter('${jsEsc(t)}')">#${esc(t)}</span>`).join('')}</div>`:'';
-      h+=`<tr style="cursor:pointer" ${dattr} onclick="productDetail('${p.id}')">
-        ${editable?`<td style="cursor:grab;color:var(--ink2)" draggable="true" ondragstart="dragProdStart(event,'${p.id}')">⠿</td>`:''}
-        <td class="vn">${esc(p.name)}${p.en?`<br><span class="muted mono" style="font-size:10px">${esc(p.en)}</span>`:''}${tagHtml}</td>
-        <td class="mono">${esc(p.unit||'')||'—'}</td>
-        <td class="mono">${p.price?'$'+esc(p.price):'—'}</td>
-        <td class="mono">${cnt}</td>
-        <td>${p.active===false?'<span class="badge off">停用</span>':'<span class="badge gn">啟用</span>'}</td>
-        <td><button class="btn ghost sm wr-products" onclick="event.stopPropagation();openProduct('${p.id}')">編輯</button></td></tr>`; });
-    h+='</tbody></table>'; });
+  if(!list.length){ el.innerHTML='<div class="note">沒有符合條件的產品。</div>'; return; }
+  const filtered = !!(q||catf||onlyActive||selTag);
+  const grouped = prodGroup==='cat' && !prodSort;                 // 有排序時一律攤平
+  const canDrag = canEdit('products') && grouped && !filtered;     // 只有分組＋未篩選＋未排序時可拖曳
+  const canCatEdit = canEdit('products') && !filtered;
+  // 工具列：分組 / 攤平 切換、展開折疊、排序狀態
+  let h=`<div class="row" style="margin-bottom:10px;gap:8px;align-items:center;flex-wrap:wrap">
+    <button class="an-tab ${prodGroup==='cat'?'on':''}" onclick="setProdGroup('cat')">▦ 依類別分組</button>
+    <button class="an-tab ${prodGroup==='flat'?'on':''}" onclick="setProdGroup('flat')">▤ 全部攤平</button>
+    ${grouped?'<button class="btn ghost sm" onclick="setAllCats(false)">全部展開</button><button class="btn ghost sm" onclick="setAllCats(true)">全部折疊</button>':''}
+    ${prodSort?`<button class="btn ghost sm" onclick="clearProdSort()">↺ 取消排序（${PSORT_LAB[prodSort.col]} ${prodSort.dir>0?'↑':'↓'}）</button>`:''}
+    <span class="muted" style="font-size:12px;margin-left:auto">${list.length} 項${canDrag?'　·　⠿ 可拖曳排序':'　·　點欄位標題排序'}</span>
+    ${canCatEdit&&grouped?'<button class="btn ghost sm wr-products" onclick="addCategory()">＋ 新增類別</button>':''}</div>`;
+
+  if(!grouped){
+    // ── 攤平：單一大表，可點欄位排序 ──
+    let rows=list.slice();
+    if(prodSort) rows.sort((a,b)=>prodCmp(a,b,prodSort.col)*prodSort.dir||(a.sort||0)-(b.sort||0));
+    else rows.sort((a,b)=>(catList().indexOf(a.category||'未分類')-catList().indexOf(b.category||'未分類'))||(a.sort||0)-(b.sort||0));
+    h+='<table class="atable grid"><thead><tr>'
+      +pTh('類別','cat')+pTh('品名','name')+pTh('單位','unit')+pTh('售價','price')+pTh('包材','cnt')+pTh('狀態','status')+'<th></th></tr></thead><tbody>';
+    rows.forEach(p=>{ h+=prodRow(p,{showCat:true}); });
+    h+='</tbody></table>';
+  } else {
+    // ── 依類別分組：每類一段，可拖曳排序、類別可改名/刪除/拖曳 ──
+    let cats;
+    if(canCatEdit){ cats=catList().slice();
+      if(DB.products.some(p=>!(p.category||'').trim()) && !cats.includes('未分類')) cats.push('未分類'); }
+    else cats=[...new Set(catList().concat(list.map(p=>p.category||'未分類')))].filter(c=>list.some(p=>(p.category||'未分類')===c));
+    cats.forEach(c=>{ const ps=list.filter(p=>(p.category||'未分類')===c).sort((a,b)=>(a.sort||0)-(b.sort||0));
+      const collapsed=!!collapsedCats[c];
+      const titleInner=`<span style="flex:1">${collapsed?'▶':'▼'} ${esc(c)} <span class="c">${ps.length} 項</span></span>`;
+      h += canCatEdit
+        ? `<div class="acat" style="user-select:none;cursor:pointer" onclick="toggleCat('${jsEsc(c)}')" ondragover="event.preventDefault()" ondrop="dragCatDrop(event,'${jsEsc(c)}')"><span draggable="true" ondragstart="dragCatStart(event,'${jsEsc(c)}')" onclick="event.stopPropagation()" style="cursor:grab;color:var(--ink2)">⠿</span> ${titleInner}<span style="display:flex;gap:6px;align-items:center"><button class="btn ghost sm" title="改名" onclick="event.stopPropagation();renameCategory('${jsEsc(c)}')">✎</button><button class="x" title="刪除類別" onclick="event.stopPropagation();deleteCategory('${jsEsc(c)}')">×</button></span></div>`
+        : `<div class="acat" style="user-select:none;cursor:pointer" onclick="toggleCat('${jsEsc(c)}')">${titleInner}</div>`;
+      if(collapsed) return;
+      if(!ps.length){ h+='<div class="muted" style="font-size:12px;padding:6px 2px 2px">（尚無產品）</div>'; return; }
+      h+='<table class="atable"><thead><tr>'+(canDrag?'<th style="width:18px"></th>':'')+'<th>品名</th><th>單位</th><th>售價</th><th>包材</th><th>狀態</th><th></th></tr></thead><tbody>';
+      ps.forEach(p=>{ h+=prodRow(p,{drag:canDrag}); });
+      h+='</tbody></table>'; });
+  }
   el.innerHTML=warn+h;
-  renderCatPhotos();
 }
 /* 拖曳排序：產品（同類別內）、類別 */
 function dragProdStart(e,id){ dragProdId=id; if(e.dataTransfer) e.dataTransfer.effectAllowed='move'; }
@@ -1223,35 +1257,7 @@ async function deleteCategory(name){ if(!requireWrite('products'))return;
   await delCatRow(name); await saveCatOrder(catList().filter(c=>c!==name));
   if(selCat===name) selCat=null;
   renderProducts(); logHist('刪除類別', name, ''); }
-function renderCatPhotos(){
-  const el=document.getElementById('catphotos'); if(!el) return;
-  const canI=canEdit('items');
-  if(!selCat){ el.innerHTML='<div class="muted" style="font-size:12px">左側選一個類別，這裡會顯示該類別產品用到的包材照片，並可上傳。</div>'; return; }
-  const prodIds=DB.products.filter(p=>(p.category||'未分類')===selCat).map(p=>p.id);
-  const packIds=[...new Set(prodIds.flatMap(pid=>DB.prodPack[pid]||[]))];
-  const packs=packIds.map(id=>DB.items.find(i=>i.id===id)).filter(Boolean);
-  let h=`<div class="acat" style="margin-top:0">「${esc(selCat)}」包材照片 <span class="c">${packs.length} 項包材</span></div>`;
-  if(!packs.length){ h+='<div class="note">此類別的產品還沒綁定任何包材。先點左側產品 →「綁定包材」，這裡就會出現對應包材可上傳照片。</div>'; el.innerHTML=h; return; }
-  packs.forEach(it=>{ const imgs=DB.images[it.id]||[];
-    h+=`<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line)">
-      <div class="row" style="justify-content:space-between"><div><b>${esc(it.name)}</b> ${it.spec?`<span class="ispec">${esc(it.spec)}</span>`:''}</div>
-        <span class="linkish" style="font-size:12px" onclick="packDetail('${it.id}')">詳情</span></div>
-      <div class="phgrid">`;
-    imgs.forEach(im=>{ const idArg=(im.id==null)?'null':`'${jsEsc(String(im.id))}'`;
-      h+=`<div class="ph"><img src="${esc(im.url)}" onclick="lightbox('${esc(im.url)}')" alt="">${canI?`<button class="del" title="刪除" onclick="delPhotoCat('${it.id}',${idArg})">×</button>`:''}${im.label?`<div class="cap">${esc(im.label)}</div>`:''}</div>`; });
-    if(canI){ h+=`<label class="ph" style="display:flex;align-items:center;justify-content:center;width:104px;height:104px;border:1.5px dashed var(--line2);cursor:pointer;font-size:26px;color:var(--ink2)" title="上傳照片">＋<input type="file" accept="image/*" class="hide" onchange="onCatPhotoPick(event,'${it.id}')"></label>`; }
-    else if(!imgs.length){ h+='<span class="muted" style="font-size:12px">尚無照片</span>'; }
-    h+='</div></div>'; });
-  el.innerHTML=h;
-}
-async function onCatPhotoPick(e,packId){ if(!requireWrite('items')){ e.target.value=''; return; }
-  const f=e.target.files[0]; e.target.value=''; if(!f) return;
-  try{ await doUploadPhoto(f,packId,''); renderCatPhotos(); renderItems(); }
-  catch(err){ alert('上傳失敗：'+((err&&err.message)?err.message:err)+'\n\n請確認已在 Supabase 建立公開 bucket：'+PHOTO_BUCKET+'（見說明檔）。'); } }
-async function delPhotoCat(packId,imgId){ if(!requireWrite('items'))return; if(!confirm('刪除這張照片？'))return;
-  DB.images[packId]=(DB.images[packId]||[]).filter(im=>String(im.id)!==String(imgId));
-  if(cloud){ if(imgId!=null) await delImageRow(imgId); } else await persist();
-  renderCatPhotos(); renderItems(); logHist('刪除照片', packName(packId), ''); }
+/* 產品管理頁的「類別包材照片」面板已移除（改為滿版表格）。包材照片仍可在「詳情」彈窗(packDetail)上傳/檢視。 */
 function openProduct(id){ if(!requireWrite('products'))return; editingProduct=id||null;
   const sel=document.getElementById('pm_cat');
   const cats=catList(); const def=(selCat&&cats.includes(selCat))?selCat:(cats[0]||'未分類');
@@ -1564,7 +1570,7 @@ async function aiApply(mi,ai){ const a=aiMsgs[mi] && aiMsgs[mi].actions && aiMsg
   if(a.type==='delete_product'||a.type==='delete_packaging'){ if(!confirm('再次確認：要永久刪除「'+a.match+'」？此動作無法復原。')) return; }
   try{ const msg=await execAiAction(a); a._done=true;
     aiMsgs.push({role:'assistant',sys:true,content:'✅ '+msg});
-    renderProducts(); renderItems(); renderCatPhotos(); aiRender();
+    renderProducts(); renderItems(); aiRender();
   }catch(err){ aiMsgs.push({role:'assistant',sys:true,content:'❌ 失敗：'+((err&&err.message)?err.message:err)}); aiRender(); }
 }
 function aiFindProd(ref){ ref=(ref||'').trim(); return DB.products.find(p=>p.id===ref)||DB.products.find(p=>(p.name||'').trim()===ref)||DB.products.find(p=>(p.name||'').toLowerCase()===ref.toLowerCase()); }
