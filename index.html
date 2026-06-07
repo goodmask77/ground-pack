@@ -259,7 +259,8 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
 
   <section id="products" class="hide">
     <h2 style="margin-top:18px"><span class="n">產品</span>產品管理
-      <button class="btn ghost sm wr-products" style="margin-left:auto" onclick="openSettings()">⚙ 選單設定</button>
+      <button class="btn ghost sm" style="margin-left:auto" onclick="exportMenuCSV()">⬇ 匯出菜單</button>
+      <button class="btn ghost sm wr-products" onclick="openSettings()">⚙ 選單設定</button>
       <button class="btn ghost sm wr-products" onclick="openBatch()">⤓ 批量上傳</button>
       <button class="btn acc sm wr-products" onclick="openProduct()">＋ 新增產品</button></h2>
     <div id="noperm-products" class="note" style="border-color:var(--accent);color:var(--accent-d)">🔒 你沒有「產品管理」頁的編輯權限，目前為唯讀。需要編輯請聯絡管理員開放。</div>
@@ -1859,6 +1860,15 @@ function exportCSV(){
   });
   const csv='\ufeff'+rows.map(r=>r.map(c=>'"'+String(c==null?'':c).replace(/"/g,'""')+'"').join(',')).join('\n');
   dl(csv,'GROUND-packaging-matrix-'+today()+'.csv','text/csv');
+}
+function exportMenuCSV(){
+  const order=catList();
+  const cats=[...new Set(order.concat(DB.products.map(p=>p.category||'未分類')))];
+  const rows=[['類別','品名','英文名稱','內容','單位','售價','包材數','狀態']];
+  cats.forEach(c=>{ DB.products.filter(p=>(p.category||'未分類')===c).sort((a,b)=>(a.sort||0)-(b.sort||0))
+    .forEach(p=>rows.push([c,p.name,p.en||'',p.note||'',p.unit||'',p.price||'',packCount(p),p.active===false?'停用':'啟用'])); });
+  const csv='﻿'+rows.map(r=>r.map(c=>'"'+String(c==null?'':c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  dl(csv,'GROUND-menu-'+today()+'.csv','text/csv');
 }
 async function resetAll(){ if(!requireWrite('data'))return; if(!confirm('清空並回到預設的 14 家廠商與包材清單。此動作會覆蓋目前資料，確定？')) return;
   if(cloud){ await wipeCloud(); await seedCloud(); } else { seedLocal(); await persist(); renderAll(); }
