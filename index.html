@@ -155,10 +155,20 @@ h2 .n{font-family:var(--mono);font-size:12px;background:var(--accent);color:#fff
 .acat.click{cursor:pointer}
 .acat.click:hover{color:var(--accent)}
 .acat.sel{color:var(--accent);border-bottom-color:var(--accent)}
-.atable th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
-.atable th.sortable:hover{color:var(--ink)}
-.atable th.sortable.act{color:var(--accent)}
-.atable.grid thead th{position:sticky;top:84px;background:var(--paper);z-index:2}
+.atable th.sortable,.gtab th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+.atable th.sortable:hover,.gtab th.sortable:hover{color:var(--ink)}
+.atable th.sortable.act,.gtab th.sortable.act{color:var(--accent)}
+/* 試算表式格狀可編輯表 */
+.gtab{width:100%;border-collapse:collapse;font-size:13px;background:var(--card)}
+.gtab th{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink2);text-align:left;padding:6px 8px;border:1px solid var(--line2);background:var(--paper2);white-space:nowrap}
+.gtab td{border:1px solid var(--line2);padding:0;vertical-align:middle}
+.gtab td.ro{padding:7px 8px;color:var(--ink2)}
+.gtab td.dragc{cursor:grab;color:var(--ink2);text-align:center;width:24px}
+.gtab input.cell,.gtab select.cell{width:100%;border:0;background:transparent;padding:7px 8px;font:inherit;color:var(--ink);box-sizing:border-box}
+.gtab select.cell{cursor:pointer}
+.gtab input.cell:focus,.gtab select.cell:focus{outline:2px solid var(--accent);outline-offset:-2px;background:#fff}
+.gtab tbody tr:hover td{background:rgba(196,88,42,.045)}
+.gtab.stick thead th{position:sticky;top:84px;z-index:2}
 .acat .c{font-family:var(--mono);font-size:11px;color:var(--ink2)}
 /* 照片 */
 .phgrid{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
@@ -1132,6 +1142,8 @@ function packCount(p){ return (DB.prodPack[p.id]||[]).filter(id=>DB.items.find(i
 function prodKey(p,col){ switch(col){
   case 'cat': return p.category||'未分類';
   case 'name': return (p.name||'').toLowerCase();
+  case 'en': return (p.en||'').toLowerCase();
+  case 'note': return (p.note||'').toLowerCase();
   case 'unit': return p.unit||'';
   case 'price': return parseFloat(String(p.price==null?'':p.price).replace(/[^\d.]/g,''))||0;
   case 'cnt': return packCount(p);
@@ -1147,17 +1159,37 @@ function pTh(label,col,extra){ if(!col) return `<th ${extra||''}>${label}</th>`;
   const act=prodSort&&prodSort.col===col; const ind=act?(prodSort.dir>0?' ▲':' ▼'):'';
   return `<th class="sortable${act?' act':''}" onclick="sortProds('${col}')" ${extra||''}>${label}${ind}</th>`; }
 function prodTags(p){ return (p.tags||[]).length?`<div class="chiplist" style="margin-top:3px">${(p.tags||[]).map(t=>`<span class="minichip" onclick="event.stopPropagation();setTagFilter('${jsEsc(t)}')">#${esc(t)}</span>`).join('')}</div>`:''; }
-function prodRow(p,opt){ opt=opt||{}; const cnt=packCount(p);
-  const dattr = opt.drag ? `ondragover="event.preventDefault()" ondrop="dragProdDrop(event,'${p.id}')"` : '';
-  return `<tr style="cursor:pointer" ${dattr} onclick="productDetail('${p.id}')">
-    ${opt.drag?`<td style="cursor:grab;color:var(--ink2)" draggable="true" ondragstart="dragProdStart(event,'${p.id}')">⠿</td>`:''}
-    ${opt.showCat?`<td class="mono" style="font-size:11px;color:var(--ink2)">${esc(p.category||'未分類')}</td>`:''}
-    <td class="vn">${esc(p.name)}${p.en?`<br><span class="muted mono" style="font-size:10px">${esc(p.en)}</span>`:''}${prodTags(p)}</td>
-    <td class="mono">${esc(p.unit||'')||'—'}</td>
-    <td class="mono">${p.price?'$'+esc(p.price):'—'}</td>
-    <td class="mono">${cnt}</td>
-    <td>${p.active===false?'<span class="badge off">停用</span>':'<span class="badge gn">啟用</span>'}</td>
-    <td><button class="btn ghost sm wr-products" onclick="event.stopPropagation();openProduct('${p.id}')">編輯</button></td></tr>`; }
+const PFLD={name:'品名',en:'英文名稱',note:'內容',unit:'單位',price:'售價'};
+/* 單格即時存檔（試算表式） */
+async function updProd(id,field,val){ if(!requireWrite('products'))return;
+  const p=DB.products.find(x=>x.id===id); if(!p) return;
+  if(field==='active'){ const v=(val==='1'); if((p.active!==false)===v) return; p.active=v; await upProduct(p);
+    logHist('修改產品', p.name||'', '狀態：'+(v?'啟用':'停用')); return; }
+  const v=String(val); const old=p[field]==null?'':String(p[field]); if(old===v) return; p[field]=v; await upProduct(p);
+  logHist('修改產品', p.name||'', (PFLD[field]||field)+'：'+(old||'(空)')+' → '+(v||'(空)')); }
+/* 格子輸入元件（無編輯權限→純文字） */
+function cTxt(p,field,ph){ if(!canEdit('products')) return `<td class="ro">${esc(p[field]||'')||'<span class="muted">—</span>'}</td>`;
+  return `<td><input class="cell" value="${esc(p[field]||'')}" placeholder="${esc(ph||'')}" onchange="updProd('${p.id}','${field}',this.value)"></td>`; }
+function cUnit(p){ if(!canEdit('products')) return `<td class="ro mono">${esc(p.unit||'')||'—'}</td>`;
+  const opts=['<option value="">—</option>'].concat(optList('unit').map(u=>`<option ${p.unit===u?'selected':''}>${esc(u)}</option>`)).join('');
+  return `<td><select class="cell" onchange="updProd('${p.id}','unit',this.value)">${opts}</select></td>`; }
+function cPrice(p){ if(!canEdit('products')) return `<td class="ro mono">${p.price?'$'+esc(p.price):'—'}</td>`;
+  return `<td><input class="cell mono" value="${esc(p.price||'')}" placeholder="$" onchange="updProd('${p.id}','price',this.value)"></td>`; }
+function cStatus(p){ const off=p.active===false; if(!canEdit('products')) return `<td class="ro">${off?'停用':'啟用'}</td>`;
+  return `<td><select class="cell" onchange="updProd('${p.id}','active',this.value)"><option value="1" ${off?'':'selected'}>啟用</option><option value="0" ${off?'selected':''}>停用</option></select></td>`; }
+function prodTr(p,opt){ opt=opt||{}; const cnt=packCount(p);
+  return `<tr ${opt.drag?`ondragover="event.preventDefault()" ondrop="dragProdDrop(event,'${p.id}')"`:''}>
+    ${opt.drag?`<td class="dragc" draggable="true" ondragstart="dragProdStart(event,'${p.id}')" title="拖曳排序">⠿</td>`:''}
+    ${opt.showCat?`<td class="ro mono" style="font-size:11px">${esc(p.category||'未分類')}</td>`:''}
+    ${cTxt(p,'name','品名')}
+    ${cTxt(p,'en','English')}
+    ${cTxt(p,'note','內容 / 備註')}
+    ${cUnit(p)}
+    ${cPrice(p)}
+    <td class="ro mono" style="text-align:center;cursor:pointer" title="點開綁定包材／照片" onclick="productDetail('${p.id}')">${cnt} ▸</td>
+    ${cStatus(p)}
+    <td class="ro" style="white-space:nowrap"><button class="btn ghost sm wr-products" onclick="openProduct('${p.id}')">編輯</button>${prodTags(p)}</td>
+  </tr>`; }
 function renderProducts(){
   const el=document.getElementById('productlist'); if(!el) return;
   renderProdCatFilter();
@@ -1192,9 +1224,9 @@ function renderProducts(){
     let rows=list.slice();
     if(prodSort) rows.sort((a,b)=>prodCmp(a,b,prodSort.col)*prodSort.dir||(a.sort||0)-(b.sort||0));
     else rows.sort((a,b)=>(catList().indexOf(a.category||'未分類')-catList().indexOf(b.category||'未分類'))||(a.sort||0)-(b.sort||0));
-    h+='<table class="atable grid"><thead><tr>'
-      +pTh('類別','cat')+pTh('品名','name')+pTh('單位','unit')+pTh('售價','price')+pTh('包材','cnt')+pTh('狀態','status')+'<th></th></tr></thead><tbody>';
-    rows.forEach(p=>{ h+=prodRow(p,{showCat:true}); });
+    h+='<table class="gtab stick"><thead><tr>'
+      +pTh('類別','cat')+pTh('品名','name')+pTh('英文名稱','en')+pTh('內容','note')+pTh('單位','unit')+pTh('售價','price')+pTh('包材','cnt')+pTh('狀態','status')+'<th>操作</th></tr></thead><tbody>';
+    rows.forEach(p=>{ h+=prodTr(p,{showCat:true}); });
     h+='</tbody></table>';
   } else {
     // ── 依類別分組：每類一段，可拖曳排序、類別可改名/刪除/拖曳 ──
@@ -1210,8 +1242,8 @@ function renderProducts(){
         : `<div class="acat" style="user-select:none;cursor:pointer" onclick="toggleCat('${jsEsc(c)}')">${titleInner}</div>`;
       if(collapsed) return;
       if(!ps.length){ h+='<div class="muted" style="font-size:12px;padding:6px 2px 2px">（尚無產品）</div>'; return; }
-      h+='<table class="atable"><thead><tr>'+(canDrag?'<th style="width:18px"></th>':'')+'<th>品名</th><th>單位</th><th>售價</th><th>包材</th><th>狀態</th><th></th></tr></thead><tbody>';
-      ps.forEach(p=>{ h+=prodRow(p,{drag:canDrag}); });
+      h+='<table class="gtab"><thead><tr>'+(canDrag?'<th style="width:24px"></th>':'')+pTh('品名','name')+pTh('英文名稱','en')+pTh('內容','note')+pTh('單位','unit')+pTh('售價','price')+pTh('包材','cnt')+pTh('狀態','status')+'<th>操作</th></tr></thead><tbody>';
+      ps.forEach(p=>{ h+=prodTr(p,{drag:canDrag}); });
       h+='</tbody></table>'; });
   }
   el.innerHTML=warn+h;
